@@ -56,9 +56,7 @@ bool BodyKinematics::init() {
     }
     RCLCPP_INFO(this->get_logger(), "Leg IK service available");
     
-    if (calculateKinematics(&bs_)) {
-        joints_pub_->publish(legs_);
-    }
+    calculateKinematics(&bs_);
     RCLCPP_INFO(this->get_logger(), "Ready to receive teleop messages...");
 
     return true;
@@ -146,32 +144,28 @@ bool BodyKinematics::callService(KDL::Vector* vector) {
         request->current_joints.push_back(legs_.joints_state[i]);
     }
 
-    // Wait for service
-    if (!client_->wait_for_service(1s)) {
+    // Check service availability (non-blocking)
+    if (!client_->service_is_ready()) {
         RCLCPP_WARN(this->get_logger(), "Service not available");
         return false;
     }
 
-    auto future = client_->async_send_request(request);
-    
-    // Wait for result
-    if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), future, 1s) ==
-        rclcpp::FutureReturnCode::SUCCESS) {
-        auto response = future.get();
-        if (response->error_codes == crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
-            for (size_t i = 0; i < num_legs_; i++) {
-                for (size_t j = 0; j < num_joints_; j++) {
-                    legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
+    // Send async request with callback
+    auto future = client_->async_send_request(request,
+        [this](rclcpp::Client<crab_msgs::srv::GetLegIKSolver>::SharedFuture response_future) {
+            auto response = response_future.get();
+            if (response->error_codes == crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
+                for (size_t i = 0; i < num_legs_; i++) {
+                    for (size_t j = 0; j < num_joints_; j++) {
+                        legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
+                    }
                 }
+                joints_pub_->publish(legs_);
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "An IK solution could not be found");
             }
-        } else {
-            RCLCPP_ERROR(this->get_logger(), "An IK solution could not be found");
-            return false;
-        }
-    } else {
-        RCLCPP_ERROR(this->get_logger(), "Failed to call service");
-        return false;
-    }
+        });
+
     return true;
 }
 
@@ -183,9 +177,7 @@ void BodyKinematics::teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr b
     bs_.roll = body_state->roll;
     bs_.yaw = body_state->yaw;
     bs_.leg_radius = body_state->leg_radius;
-    if (calculateKinematics(&bs_)) {
-        joints_pub_->publish(legs_);
-    }
+    calculateKinematics(&bs_);
 }
 
 void BodyKinematics::teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr body_cmd) {
@@ -195,9 +187,7 @@ void BodyKinematics::teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr 
         while (bs_.z >= -z_) {
             bs_.z -= 0.0025;
             r.sleep();
-            if (calculateKinematics(&bs_)) {
-                joints_pub_->publish(legs_);
-            }
+            calculateKinematics(&bs_);
         }
     }
     if (body_cmd->cmd == crab_msgs::msg::BodyCommand::SEAT_DOWN_CMD) {
@@ -206,9 +196,7 @@ void BodyKinematics::teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr 
         while (bs_.z <= -0.016) {
             bs_.z += 0.0025;
             r.sleep();
-            if (calculateKinematics(&bs_)) {
-                joints_pub_->publish(legs_);
-            }
+            calculateKinematics(&bs_);
         }
     }
 }
