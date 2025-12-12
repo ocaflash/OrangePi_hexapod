@@ -8,7 +8,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('crab_description')
     xacro_file = os.path.join(pkg_share, 'models', 'crab_model.xacro')
     
-    robot_description = Command(['xacro ', xacro_file])
+    robot_description = Command(['xacro ', xacro_file], on_stderr='ignore')
 
     return LaunchDescription([
         # Robot State Publisher (публикует URDF)

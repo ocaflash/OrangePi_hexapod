@@ -25,10 +25,10 @@ colcon build || { echo "❌ Ошибка сборки"; exit 1; }
 echo "→ Активируем окружение..."
 source $WORKSPACE/install/setup.bash
 
+# Делаем скрипт запуска исполняемым
+chmod +x $REPO_DIR/start_hexapod.sh
+
 echo "✅ Сборка завершена!"
 echo ""
-echo "Для запуска робота используй:"
-echo "  ros2 launch crab_description hexapod.launch.py"
-echo ""
-echo "Или запусти скрипт:"
-echo "  ~/ros2_ws/src/OrangePi_hexapod/start_hexapod.sh"
+echo "Для запуска робота:"
+echo "  $REPO_DIR/start_hexapod.sh"
