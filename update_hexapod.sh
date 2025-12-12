@@ -19,10 +19,11 @@ cd $WORKSPACE
 
 # Сборка пакетов
 echo "→ Запускаем colcon build..."
-colcon build --packages-up-to crab_imu || { echo "❌ Ошибка сборки"; exit 1; }
+colcon build --packages-up-to crab_imu crab_body_kinematics || { echo "❌ Ошибка сборки"; exit 1; }
 
 # Подключаем окружение
 echo "→ Активируем окружение..."
 source $WORKSPACE/install/setup.bash
 
-echo "✅ Готово! Узлы можно запускать через ros2 run."
+echo "✅ Готово! Узлы можно запускать через:"
+echo "ros2 run crab_body_kinematics body_kinematics"
