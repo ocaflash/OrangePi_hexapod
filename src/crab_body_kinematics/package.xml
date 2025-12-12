@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>crab_body_kinematics</name>
+  <version>0.0.1</version>
+  <description>Body kinematics for crab hexapod robot (ROS 2)</description>
+
+  <maintainer email="tuuzdu@todo.todo">tuuzdu</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>kdl_parser</depend>
+  <depend>orocos_kdl_vendor</depend>
+  <depend>crab_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
