@@ -58,9 +58,9 @@ def generate_launch_description():
             executable='teleop_joy',
         ),
         
-        # Joy node (драйвер джойстика)
-        Node(
-            package='joy',
-            executable='joy_node',
-        ),
+        # Joy node (драйвер джойстика) - установи ros-jazzy-joy если нужен
+        # Node(
+        #     package='joy',
+        #     executable='joy_node',
+        # ),
     ])
