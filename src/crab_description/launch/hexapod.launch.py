@@ -1,7 +1,8 @@
 import os
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
@@ -9,8 +10,17 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'models', 'crab_model.xacro')
     
     robot_description = Command(['xacro ', xacro_file], on_stderr='ignore')
+    
+    # Аргумент для порта Maestro
+    port_name_arg = DeclareLaunchArgument(
+        'port_name',
+        default_value='/dev/ttyS5',
+        description='Serial port for Maestro servo controller'
+    )
 
     return LaunchDescription([
+        port_name_arg,
+        
         # Robot State Publisher (публикует URDF)
         Node(
             package='robot_state_publisher',
@@ -62,6 +72,7 @@ def generate_launch_description():
         Node(
             package='maestro_driver',
             executable='servo_node',
+            parameters=[{'port_name': LaunchConfiguration('port_name')}],
         ),
         
         # Joy node (драйвер джойстика) - установи ros-jazzy-joy если нужен
