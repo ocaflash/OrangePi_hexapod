@@ -7,29 +7,30 @@
 #include <crab_msgs/msg/body_command.hpp>
 #include <crab_msgs/msg/gait_command.hpp>
 
-// PS3 controller button/axis mappings
-#define PS3_BUTTON_SELECT            0
-#define PS3_BUTTON_STICK_LEFT        1
-#define PS3_BUTTON_STICK_RIGHT       2
-#define PS3_BUTTON_START             3
-#define PS3_BUTTON_CROSS_UP          4
-#define PS3_BUTTON_CROSS_RIGHT       5
-#define PS3_BUTTON_CROSS_DOWN        6
-#define PS3_BUTTON_CROSS_LEFT        7
-#define PS3_BUTTON_REAR_LEFT_2       8
-#define PS3_BUTTON_REAR_RIGHT_2      9
-#define PS3_BUTTON_REAR_LEFT_1       10
-#define PS3_BUTTON_REAR_RIGHT_1      11
-#define PS3_BUTTON_ACTION_TRIANGLE   12
-#define PS3_BUTTON_ACTION_CIRCLE     13
-#define PS3_BUTTON_ACTION_CROSS      14
-#define PS3_BUTTON_ACTION_SQUARE     15
-#define PS3_BUTTON_PAIRING           16
+// DualShock 4 controller button mappings
+#define DS4_BUTTON_CROSS             0   // X
+#define DS4_BUTTON_CIRCLE            1   // O
+#define DS4_BUTTON_TRIANGLE          2   // Triangle
+#define DS4_BUTTON_SQUARE            3   // Square
+#define DS4_BUTTON_L1                4
+#define DS4_BUTTON_R1                5
+#define DS4_BUTTON_L2                6
+#define DS4_BUTTON_R2                7
+#define DS4_BUTTON_SHARE             8
+#define DS4_BUTTON_OPTIONS           9   // Start equivalent
+#define DS4_BUTTON_PS                10
+#define DS4_BUTTON_L3                11  // Left stick press
+#define DS4_BUTTON_R3                12  // Right stick press
 
-#define PS3_AXIS_STICK_LEFT_LEFTWARDS    0
-#define PS3_AXIS_STICK_LEFT_UPWARDS      1
-#define PS3_AXIS_STICK_RIGHT_LEFTWARDS   2
-#define PS3_AXIS_STICK_RIGHT_UPWARDS     3
+// DualShock 4 axis mappings
+#define DS4_AXIS_LEFT_STICK_X        0   // Left/Right (-1 to 1)
+#define DS4_AXIS_LEFT_STICK_Y        1   // Up/Down (-1 to 1)
+#define DS4_AXIS_RIGHT_STICK_X       2   // Left/Right
+#define DS4_AXIS_RIGHT_STICK_Y       3   // Up/Down
+#define DS4_AXIS_L2                  4   // Trigger (1 to -1)
+#define DS4_AXIS_R2                  5   // Trigger
+#define DS4_AXIS_DPAD_X              6   // D-pad Left/Right
+#define DS4_AXIS_DPAD_Y              7   // D-pad Up/Down
 
 class TeleopJoy : public rclcpp::Node {
 public:
@@ -52,22 +53,23 @@ private:
 
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy);
 
-    static constexpr int axis_body_roll_ = PS3_AXIS_STICK_LEFT_LEFTWARDS;
-    static constexpr int axis_body_pitch_ = PS3_AXIS_STICK_LEFT_UPWARDS;
-    static constexpr int axis_body_yaw_ = PS3_AXIS_STICK_RIGHT_LEFTWARDS;
-    static constexpr int axis_body_y_off_ = PS3_AXIS_STICK_LEFT_LEFTWARDS;
-    static constexpr int axis_body_x_off_ = PS3_AXIS_STICK_LEFT_UPWARDS;
-    static constexpr int axis_body_z_off_ = PS3_AXIS_STICK_RIGHT_UPWARDS;
-    static constexpr int button_left_shift_ = PS3_BUTTON_REAR_LEFT_1;
-    static constexpr int button_right_shift_ = PS3_BUTTON_REAR_RIGHT_1;
-    static constexpr int button_right_shift_2_ = PS3_BUTTON_REAR_LEFT_2;
-    static constexpr int button_start_ = PS3_BUTTON_START;
-    static constexpr int axis_fi_x_ = PS3_AXIS_STICK_LEFT_LEFTWARDS;
-    static constexpr int axis_fi_y_ = PS3_AXIS_STICK_LEFT_UPWARDS;
-    static constexpr int button_gait_switch_ = PS3_BUTTON_ACTION_TRIANGLE;
-    static constexpr int axis_alpha_ = PS3_AXIS_STICK_RIGHT_LEFTWARDS;
-    static constexpr int axis_scale_ = PS3_AXIS_STICK_RIGHT_UPWARDS;
-    static constexpr int button_imu_ = PS3_BUTTON_ACTION_CROSS;
+    // DualShock 4 mappings
+    static constexpr int axis_body_roll_ = DS4_AXIS_LEFT_STICK_X;
+    static constexpr int axis_body_pitch_ = DS4_AXIS_LEFT_STICK_Y;
+    static constexpr int axis_body_yaw_ = DS4_AXIS_RIGHT_STICK_X;
+    static constexpr int axis_body_y_off_ = DS4_AXIS_LEFT_STICK_X;
+    static constexpr int axis_body_x_off_ = DS4_AXIS_LEFT_STICK_Y;
+    static constexpr int axis_body_z_off_ = DS4_AXIS_RIGHT_STICK_Y;
+    static constexpr int button_left_shift_ = DS4_BUTTON_L1;
+    static constexpr int button_right_shift_ = DS4_BUTTON_R1;
+    static constexpr int button_right_shift_2_ = DS4_BUTTON_L2;
+    static constexpr int button_start_ = DS4_BUTTON_OPTIONS;
+    static constexpr int axis_fi_x_ = DS4_AXIS_LEFT_STICK_X;
+    static constexpr int axis_fi_y_ = DS4_AXIS_LEFT_STICK_Y;
+    static constexpr int button_gait_switch_ = DS4_BUTTON_TRIANGLE;
+    static constexpr int axis_alpha_ = DS4_AXIS_RIGHT_STICK_X;
+    static constexpr int axis_scale_ = DS4_AXIS_RIGHT_STICK_Y;
+    static constexpr int button_imu_ = DS4_BUTTON_CROSS;
 };
 
 #endif /* TELEOP_JOY_HPP_ */
