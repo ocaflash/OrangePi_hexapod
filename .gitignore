@@ -1,4 +1,10 @@
 crab_project-master.zip
 tree.txt
-crab_project-master/*
+crab_project-master_old/*
 .DS_Store*
+
+build/
+install/
+log/
+*.swp
+*.pyc
