@@ -19,7 +19,7 @@ cd $WORKSPACE
 
 # Сборка пакетов
 echo "→ Запускаем colcon build..."
-colcon build --packages-up-to crab_imu crab_body_kinematics crab_description crab_leg_kinematics || { echo "❌ Ошибка сборки"; exit 1; }
+colcon build --packages-up-to crab_imu crab_body_kinematics crab_description crab_leg_kinematics crab_gait || { echo "❌ Ошибка сборки"; exit 1; }
 
 # Подключаем окружение
 echo "→ Активируем окружение..."
