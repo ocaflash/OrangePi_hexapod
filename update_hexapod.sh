@@ -25,5 +25,10 @@ colcon build --packages-up-to crab_imu crab_body_kinematics || { echo "❌ Ош�
 echo "→ Активируем окружение..."
 source $WORKSPACE/install/setup.bash
 
-echo "✅ Готово! Узлы можно запускать через:"
-echo "ros2 run crab_body_kinematics body_kinematics"
+echo "✅ Готово! Запускаем ноды..."
+
+# Запуск нод в фоне
+ros2 run crab_imu imu_control &
+ros2 run crab_body_kinematics body_kinematics &
+
+echo "Ноды запущены. Для остановки: pkill -f 'ros2 run'"
