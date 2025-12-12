@@ -7,6 +7,7 @@ find_package(std_msgs REQUIRED)
 find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl_vendor REQUIRED)
 find_package(crab_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # IK solver library
 add_library(leg_ik_solver
@@ -14,6 +15,7 @@ add_library(leg_ik_solver
   src/chainiksolvervel_pinv.cpp
   src/svd_HH.cpp
 )
+target_include_directories(leg_ik_solver PUBLIC ${EIGEN3_INCLUDE_DIR})
 ament_target_dependencies(leg_ik_solver rclcpp orocos_kdl_vendor)
 
 # Leg IK service node
