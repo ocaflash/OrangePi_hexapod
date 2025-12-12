@@ -58,6 +58,12 @@ def generate_launch_description():
             executable='teleop_joy',
         ),
         
+        # Maestro Servo Driver
+        Node(
+            package='maestro_driver',
+            executable='servo_node',
+        ),
+        
         # Joy node (драйвер джойстика) - установи ros-jazzy-joy если нужен
         # Node(
         #     package='joy',
