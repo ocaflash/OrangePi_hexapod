@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.5)
+project(maestro_driver)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(crab_msgs REQUIRED)
+
+# Polstro library
+add_library(polstro
+  src/PolstroSerialInterface.cpp
+  src/PolstroSerialInterfacePOSIX.cpp
+)
+
+# Servo controller node
+add_executable(servo_node src/servo_node.cpp)
+target_link_libraries(servo_node polstro)
+ament_target_dependencies(servo_node rclcpp std_msgs crab_msgs)
+
+install(TARGETS
+  polstro
+  servo_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_package()
