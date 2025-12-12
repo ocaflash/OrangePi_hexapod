@@ -45,7 +45,17 @@ bool BodyKinematics::init() {
     bs_.leg_radius = 0.11;
     bs_.z = -0.016;
     
-    std::this_thread::sleep_for(1s);
+    // Ждём пока сервис IK станет доступен
+    RCLCPP_INFO(this->get_logger(), "Waiting for leg IK service...");
+    while (!client_->wait_for_service(1s)) {
+        if (!rclcpp::ok()) {
+            RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for service");
+            return false;
+        }
+        RCLCPP_INFO(this->get_logger(), "Still waiting for leg IK service...");
+    }
+    RCLCPP_INFO(this->get_logger(), "Leg IK service available");
+    
     if (calculateKinematics(&bs_)) {
         joints_pub_->publish(legs_);
     }
