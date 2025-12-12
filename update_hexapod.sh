@@ -25,11 +25,10 @@ colcon build || { echo "❌ Ошибка сборки"; exit 1; }
 echo "→ Активируем окружение..."
 source $WORKSPACE/install/setup.bash
 
-echo "✅ Готово! Запускаем ноды..."
-
-# Запуск нод в фоне
-ros2 run crab_imu imu_control &
-ros2 run crab_leg_kinematics leg_ik_service &
-ros2 run crab_body_kinematics body_kinematics &
-
-echo "Ноды запущены. Для остановки: pkill -f 'ros2 run'"
+echo "✅ Сборка завершена!"
+echo ""
+echo "Для запуска робота используй:"
+echo "  ros2 launch crab_description hexapod.launch.py"
+echo ""
+echo "Или запусти скрипт:"
+echo "  ~/ros2_ws/src/OrangePi_hexapod/start_hexapod.sh"
