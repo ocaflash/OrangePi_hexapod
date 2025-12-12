@@ -19,7 +19,7 @@ cd $WORKSPACE
 
 # Сборка пакетов
 echo "→ Запускаем colcon build..."
-colcon build --packages-up-to crab_imu crab_body_kinematics crab_description || { echo "❌ Ошибка сборки"; exit 1; }
+colcon build --packages-up-to crab_imu crab_body_kinematics crab_description crab_leg_kinematics || { echo "❌ Ошибка сборки"; exit 1; }
 
 # Подключаем окружение
 echo "→ Активируем окружение..."
@@ -29,6 +29,7 @@ echo "✅ Готово! Запускаем ноды..."
 
 # Запуск нод в фоне
 ros2 run crab_imu imu_control &
+ros2 run crab_leg_kinematics leg_ik_service &
 ros2 run crab_body_kinematics body_kinematics &
 
 echo "Ноды запущены. Для остановки: pkill -f 'ros2 run'"
