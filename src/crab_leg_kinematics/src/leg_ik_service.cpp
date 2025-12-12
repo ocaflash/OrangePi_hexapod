@@ -51,7 +51,7 @@ bool LegKinematics::init() {
 
     RCLCPP_INFO(this->get_logger(), "Advertising service");
     ik_service_ = this->create_service<crab_msgs::srv::GetLegIKSolver>(
-        "get_ik",
+        "~/get_ik",
         std::bind(&LegKinematics::getLegIKSolver, this, std::placeholders::_1, std::placeholders::_2));
     RCLCPP_INFO(this->get_logger(), "Ready to client's request...");
     return true;
