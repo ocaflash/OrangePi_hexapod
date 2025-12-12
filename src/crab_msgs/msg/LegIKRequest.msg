@@ -1,0 +1,3 @@
+int32 leg_number
+LegJointsState current_joints
+LegPositionState target_position

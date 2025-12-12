@@ -1,20 +1,21 @@
 cmake_minimum_required(VERSION 3.5)
 project(crab_imu)
 
-# Найти зависимости ROS 2
+# Find ROS 2 dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(crab_msgs REQUIRED)
 
-# Пути к заголовочным файлам
+# Include directories
 include_directories(
   include
   src/IMU
   src/sys
 )
 
-# Библиотека IMU
+# IMU library
 add_library(imu
   src/IMU/Compass.cpp
   src/IMU/DCM.cpp
@@ -27,7 +28,7 @@ add_library(imu
 
 ament_target_dependencies(imu rclcpp sensor_msgs std_msgs)
 
-# Узел управления IMU
+# IMU control node
 add_executable(imu_control
   src/imu_control.cpp
   src/sys/Timer.cpp
@@ -35,9 +36,9 @@ add_executable(imu_control
 )
 
 target_link_libraries(imu_control imu)
-ament_target_dependencies(imu_control rclcpp sensor_msgs std_msgs)
+ament_target_dependencies(imu_control rclcpp sensor_msgs std_msgs crab_msgs)
 
-# Установка
+# Installation
 install(TARGETS
   imu
   imu_control
@@ -48,5 +49,4 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-# Завершение
 ament_package()

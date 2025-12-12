@@ -123,8 +123,9 @@ char I2C::readI2CDeviceByte(char address) {
 		cout << "Failed to Reset Address in readFullSensorState() " << endl;
 	}
 
-	unsigned char buffer[1];
-	buffer[0] = address;
+	unsigned char buffer[2];
+	buffer[0] = 0;
+	buffer[1] = 0;
 	if (read(file, buffer, 2) != 2) {
 		cout << "Failure to read value from I2C Device address." << endl;
 	}

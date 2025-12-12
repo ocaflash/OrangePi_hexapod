@@ -1,9 +1,6 @@
-
 #include "imu_control.hpp"
 
-
 using namespace std;
-
 
 // Uncomment the below line to use this axis definition:
    // X axis pointing forward
@@ -13,20 +10,12 @@ using namespace std;
 // Positive roll : right wing down
 // Positive yaw : clockwise
 int SENSOR_SIGN[9] = {1,1,1,-1,-1,-1,1,1,1}; //Correct directions x,y,z - gyro, accelerometer, magnetometer
-// Uncomment the below line to use this axis definition:
-   // X axis pointing forward
-   // Y axis pointing to the left
-   // and Z axis pointing up.
-// Positive pitch : nose down
-// Positive roll : right wing down
-// Positive yaw : counterclockwise
-//int SENSOR_SIGN[9] = {1,-1,-1,-1,1,1,1,-1,-1}; //Correct directions x,y,z - gyro, accelerometer, magnetometer
 
 float G_Dt=0.02;    // Integration time (DCM algorithm)  We will run the integration loop at 50Hz if possible
 
-ros::Time timer(0);   //general purpuse timer
-ros::Time timer_old(0);
-//long timer24=0; //Second timer used to print values
+rclcpp::Time timer_val;
+rclcpp::Time timer_old;
+
 int AN[6]; //array that stores the gyro and accelerometer data
 int AN_OFFSET[6]={0,0,0,0,0,0}; //Array that stores the Offset of the sensors
 
@@ -62,177 +51,151 @@ float errorYaw[3]= {0,0,0};
 unsigned int counter=0;
 
 float DCM_Matrix[3][3]= {
-  {
-    1,0,0  }
-  ,{
-    0,1,0  }
-  ,{
-    0,0,1  }
+  {1,0,0},
+  {0,1,0},
+  {0,0,1}
 };
 float Update_Matrix[3][3]={{0,1,2},{3,4,5},{6,7,8}}; //Gyros here
 
-
 float Temporary_Matrix[3][3]={
-  {
-    0,0,0  }
-  ,{
-    0,0,0  }
-  ,{
-    0,0,0  }
+  {0,0,0},
+  {0,0,0},
+  {0,0,0}
 };
 
-bool imu_on = false;
-crab_msgs::BodyState body_state;
-ros::Publisher move_body_pub;
-ros::Subscriber body_cmd_sub;
-
-
-
-void setup_IMU()
+class ImuControlNode : public rclcpp::Node
 {
+public:
+  ImuControlNode() : Node("imu_control"), imu_on_(false)
+  {
+    body_state_.z = -0.08;
+    body_state_.leg_radius = 0.11;
 
-	ROS_INFO ("Start initialization IMU");
-	IMU_Init();
-	usleep (20000);
-	for(int i=0;i<32;i++)    // We take some readings...
+    body_cmd_sub_ = this->create_subscription<crab_msgs::msg::BodyCommand>(
+      "/teleop/body_command", 1,
+      std::bind(&ImuControlNode::teleopBodyCmd, this, std::placeholders::_1));
+
+    move_body_pub_ = this->create_publisher<crab_msgs::msg::BodyState>("/teleop/move_body", 1);
+
+    // Timer for main loop at 45Hz
+    timer_ = this->create_wall_timer(
+      std::chrono::milliseconds(22),
+      std::bind(&ImuControlNode::mainLoop, this));
+
+    timer_val = this->now();
+    timer_old = this->now();
+  }
+
+private:
+  void setup_IMU()
+  {
+    RCLCPP_INFO(this->get_logger(), "Start initialization IMU");
+    IMU_Init();
+    usleep(20000);
+    for(int i=0; i<32; i++)    // We take some readings...
     {
-		Read_Gyro();
-		Read_Accel();
-		for(int y=0; y<6; y++)   // Cumulate values
-			AN_OFFSET[y] += AN[y];
-		usleep (20000);
+      Read_Gyro();
+      Read_Accel();
+      for(int y=0; y<6; y++)   // Cumulate values
+        AN_OFFSET[y] += AN[y];
+      usleep(20000);
     }
 
-	for(int y=0; y<6; y++)
-		AN_OFFSET[y] = AN_OFFSET[y]/32;
+    for(int y=0; y<6; y++)
+      AN_OFFSET[y] = AN_OFFSET[y]/32;
 
-	AN_OFFSET[5]-=GRAVITY*SENSOR_SIGN[5];
+    AN_OFFSET[5]-=GRAVITY*SENSOR_SIGN[5];
 
-	timer=ros::Time::now();
-	usleep (20000);
-	counter=0;
-}
+    timer_val = this->now();
+    usleep(20000);
+    counter=0;
+  }
 
-void teleopBodyCmd(const crab_msgs::BodyCommandConstPtr &body_cmd){
-	if (body_cmd->cmd == body_cmd->IMU_START_CMD){
-		setup_IMU();
-		ros::Rate r(25);
-		while (body_state.z >= -0.08){
-			body_state.z -= 0.0025;
-			r.sleep();
-			move_body_pub.publish(body_state);
-		}
-		imu_on = true;
-//		ros::Duration(2.5).sleep();
+  void teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr body_cmd)
+  {
+    if (body_cmd->cmd == crab_msgs::msg::BodyCommand::STAND_UP_CMD + 2) { // IMU_START_CMD = 3
+      setup_IMU();
+      rclcpp::Rate r(25);
+      while (body_state_.z >= -0.08) {
+        body_state_.z -= 0.0025;
+        r.sleep();
+        move_body_pub_->publish(body_state_);
+      }
+      imu_on_ = true;
+    }
+    if (body_cmd->cmd == crab_msgs::msg::BodyCommand::STAND_UP_CMD + 3) { // IMU_STOP_CMD = 4
+      rclcpp::Rate r(25);
+      body_state_.roll = 0;
+      body_state_.pitch = 0;
+      body_state_.yaw = 0;
+      body_state_.x = 0;
+      body_state_.y = 0;
+      while (body_state_.z <= -0.016) {
+        body_state_.z += 0.0025;
+        r.sleep();
+        move_body_pub_->publish(body_state_);
+      }
+      imu_on_ = false;
+    }
+  }
 
-	}
-	if (body_cmd->cmd == body_cmd->IMU_STOP_CMD){
-		ros::Rate r(25);
-		body_state.roll = 0;
-		body_state.pitch = 0;
-		body_state.yaw = 0;
-		body_state.x = 0;
-		body_state.y = 0;
-		while (body_state.z <= -0.016){
-			body_state.z += 0.0025;
-			r.sleep();
-			move_body_pub.publish(body_state);
-		}
-		imu_on = false;
-//		ros::Duration(2).sleep();
-	}
-}
+  void mainLoop()
+  {
+    if (!imu_on_) return;
 
+#if CALIBRMODE == 0
+    counter++;
+    timer_old = timer_val;
+    timer_val = this->now();
+    if (timer_val > timer_old)
+      G_Dt = (timer_val.seconds() - timer_old.seconds());
+    else
+      G_Dt = 0;
 
-int main(int argc, char **argv){
+    // *** DCM algorithm
+    // Data acquisition
+    Read_Gyro();   // This read gyro data
+    Read_Accel();  // Read I2C accelerometer
 
-	ros::init(argc, argv, "imu_control");
-	ros::Time::init();
-	ros::Rate loop_rate(45);
-	ros::NodeHandle node;
-//	crab_msgs::BodyState body_state;
-	body_state.z = -0.08;
-	body_state.leg_radius = 0.11;
+    if (counter > 5)  // Read compass data at 10Hz... (5 loop runs)
+    {
+      counter=0;
+      Read_Compass();    // Read I2C magnetometer
+      Compass_Heading(); // Calculate magnetic heading
+    }
 
-	body_cmd_sub = node.subscribe<crab_msgs::BodyCommand>("/teleop/body_command", 1, teleopBodyCmd);
-	move_body_pub = node.advertise<crab_msgs::BodyState>("/teleop/move_body",1);
+    // Calculations...
+    Matrix_update();
+    Normalize();
+    Drift_correction();
+    Euler_angles();
 
-//	setup_IMU();
+    if (roll > 0.015) body_state_.roll = body_state_.roll + 0.1 * roll;
+    if (roll < -0.015) body_state_.roll = body_state_.roll + 0.1 * roll;
+    if (pitch > 0.015) body_state_.pitch = body_state_.pitch - 0.1 * pitch;
+    if (pitch < -0.015) body_state_.pitch = body_state_.pitch - 0.1 * pitch;
 
-#if CALIBRMODE == 0		// Magnetometer calibration is off
+    if (body_state_.roll > 0.35) body_state_.roll = 0.35;
+    if (body_state_.roll < -0.35) body_state_.roll = -0.35;
+    if (body_state_.pitch > 0.35) body_state_.pitch = 0.35;
+    if (body_state_.pitch < -0.35) body_state_.pitch = -0.35;
 
-	while (node.ok()){
-		if (imu_on){
-			counter++;
-			timer_old = timer;
-			timer=ros::Time::now();
-			if (timer>timer_old)
-			  G_Dt = (timer.toSec()-timer_old.toSec());    // Real time of loop run. We use this on the DCM algorithm (gyro integration time)
-			else
-			  G_Dt = 0;
-
-			// *** DCM algorithm
-			// Data adquisition
-			Read_Gyro();   // This read gyro data
-			Read_Accel();     // Read I2C accelerometer
-
-			if (counter > 5)  // Read compass data at 10Hz... (5 loop runs)
-			  {
-			  counter=0;
-			  Read_Compass();    // Read I2C magnetometer
-			  Compass_Heading(); // Calculate magnetic heading
-			  }
-
-			// Calculations...
-			Matrix_update();
-			Normalize();
-			Drift_correction();
-			Euler_angles();
-			// ***
-	//	    printf ("\033[1Aroll: %.2f \tpitch: %.2f  \tyaw: %.2f\n", roll, pitch, yaw);
-
-			if (roll > 0.015) body_state.roll = body_state.roll + 0.1 * roll;
-			if (roll < -0.015) body_state.roll = body_state.roll + 0.1 * roll;
-			if (pitch > 0.015) body_state.pitch = body_state.pitch - 0.1 * pitch;
-			if (pitch < -0.015) body_state.pitch = body_state.pitch - 0.1 * pitch;
-
-			if (body_state.roll > 0.35) body_state.roll = 0.35;
-			if (body_state.roll < -0.35) body_state.roll = -0.35;
-			if (body_state.pitch > 0.35) body_state.pitch = 0.35;
-			if (body_state.pitch < -0.35) body_state.pitch = -0.35;
-
-			move_body_pub.publish(body_state);
-		}
-	    ros::spinOnce();
-	    loop_rate.sleep();
-	}
-
-	// For magnetometer calibration
-#else
-
-#define min(a,b) ((a)<(b)?(a):(b))
-#define max(a,b) ((a)>(b)?(a):(b))
-
-	LSM303::vector running_min = {2047, 2047, 2047}, running_max = {-2048, -2048, -2048};
-	while (1){
-		Read_Compass();
-
-		running_min.x = min(running_min.x, (float) magnetom_x);
-		running_min.y = min(running_min.y, (float) magnetom_y);
-		running_min.z = min(running_min.z, (float) magnetom_z);
-
-		running_max.x = max(running_max.x, (float) magnetom_x);
-		running_max.y = max(running_max.y, (float) magnetom_y);
-		running_max.z = max(running_max.z, (float) magnetom_z);
-
-		printf ("\033[1Amin_x: %04d\tmin_y: %04d\tmin_z: %04d\tmax_x: %04d\tmax_y: %04d\tmax_z: %04d\n",
-				(int) running_min.x, (int) running_min.y, (int) running_min.z,
-				(int) running_max.x, (int) running_max.y, (int) running_max.z);
-		usleep (100000);
-	}
-
+    move_body_pub_->publish(body_state_);
 #endif
+  }
+
+  bool imu_on_;
+  crab_msgs::msg::BodyState body_state_;
+  rclcpp::Publisher<crab_msgs::msg::BodyState>::SharedPtr move_body_pub_;
+  rclcpp::Subscription<crab_msgs::msg::BodyCommand>::SharedPtr body_cmd_sub_;
+  rclcpp::TimerBase::SharedPtr timer_;
+};
+
+int main(int argc, char **argv)
+{
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<ImuControlNode>();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
+  return 0;
 }
-
-
-
