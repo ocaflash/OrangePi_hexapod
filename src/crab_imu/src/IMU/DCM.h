@@ -8,9 +8,9 @@
 #ifndef DCM_H_
 #define DCM_H_
 
+#include <cmath>
+
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
-// Use crab_abs to avoid conflict with stdlib abs
-#define crab_abs(x) ((x)>0?(x):-(x))
 
 void Normalize(void);
 void Drift_correction(void);
