@@ -3,6 +3,14 @@
 
 using namespace std::chrono_literals;
 
+// Deadzone threshold for joystick axes
+constexpr float DEADZONE = 0.15f;
+
+// Apply deadzone to axis value
+inline float applyDeadzone(float value) {
+    return (std::abs(value) < DEADZONE) ? 0.0f : value;
+}
+
 TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(false), imu_flag_(false) {
     this->declare_parameter<double>("clearance", 0.045);
     z_ = this->get_parameter("clearance").as_double();
@@ -79,32 +87,34 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         }
         // Gait Signals
         if (!joy->buttons[button_left_shift_] && !joy->buttons[button_right_shift_]) {
-            if (joy->axes[axis_fi_x_] != 0 || joy->axes[axis_fi_y_] != 0) {
+            // Apply deadzone to all axes
+            float fi_x = applyDeadzone(joy->axes[axis_fi_x_]);
+            float fi_y = applyDeadzone(joy->axes[axis_fi_y_]);
+            float alpha = applyDeadzone(joy->axes[axis_alpha_]);
+            float scale = applyDeadzone(joy->axes[axis_scale_]);
+
+            if (fi_x != 0 || fi_y != 0) {
                 if (!gait_flag_) {
                     gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
                 } else {
                     gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNTRIPOD;
                 }
-                float a = std::pow(joy->axes[axis_fi_x_], 2);
-                float b = std::pow(joy->axes[axis_fi_y_], 2);
-                gait_command_.fi = std::atan2(joy->axes[axis_fi_x_], joy->axes[axis_fi_y_]);
+                float a = std::pow(fi_x, 2);
+                float b = std::pow(fi_y, 2);
+                gait_command_.fi = std::atan2(fi_x, fi_y);
                 gait_command_.scale = std::pow(a + b, 0.5) > 1 ? 1 : std::pow(a + b, 0.5);
                 gait_command_.alpha = 0;
-            }
-
-            if (joy->axes[axis_alpha_] != 0 || joy->axes[axis_scale_] != 0) {
+            } else if (alpha != 0 || scale != 0) {
                 if (!gait_flag_) {
                     gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
                 } else {
                     gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNTRIPOD;
                 }
-                gait_command_.fi = (joy->axes[axis_scale_] > 0) ? 0 : 3.14;
-                gait_command_.scale = joy->axes[axis_scale_];
-                if (gait_command_.scale < 0) gait_command_.scale *= -1;
-                gait_command_.alpha = ((joy->axes[axis_alpha_] > 0) ? 1 : -1) * 0.06 * (1 - gait_command_.scale) + 0.11 * joy->axes[axis_alpha_];
-            }
-
-            if (!joy->axes[axis_alpha_] && !joy->axes[axis_scale_] && !joy->axes[axis_fi_x_] && !joy->axes[axis_fi_y_]) {
+                gait_command_.fi = (scale > 0) ? 0 : 3.14;
+                gait_command_.scale = std::abs(scale);
+                gait_command_.alpha = ((alpha > 0) ? 1 : -1) * 0.06 * (1 - gait_command_.scale) + 0.11 * alpha;
+            } else {
+                // All sticks in neutral - PAUSE
                 gait_command_.cmd = crab_msgs::msg::GaitCommand::PAUSE;
             }
             gait_cmd_pub_->publish(gait_command_);
@@ -115,8 +125,11 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             body_state_.leg_radius = 0.06 * joy->axes[axis_body_yaw_] + 0.11;
             move_body_pub_->publish(body_state_);
         }
-        gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
-        gait_cmd_pub_->publish(gait_command_);
+        // Only publish STOP once when transitioning to stopped state
+        if (gait_command_.cmd != crab_msgs::msg::GaitCommand::STOP) {
+            gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
+            gait_cmd_pub_->publish(gait_command_);
+        }
     }
 }
 
