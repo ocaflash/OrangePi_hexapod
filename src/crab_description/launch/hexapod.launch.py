@@ -72,12 +72,15 @@ def generate_launch_description():
         Node(
             package='maestro_driver',
             executable='servo_node',
-            parameters=[{'port_name': LaunchConfiguration('port_name')}],
+            parameters=[{
+                'port_name': LaunchConfiguration('port_name'),
+                'baud_rate': 115200
+            }],
         ),
         
-        # Joy node (драйвер джойстика) - установи ros-jazzy-joy если нужен
-        # Node(
-        #     package='joy',
-        #     executable='joy_node',
-        # ),
+        # Joy node (драйвер джойстика)
+        Node(
+            package='joy',
+            executable='joy_node',
+        ),
     ])
