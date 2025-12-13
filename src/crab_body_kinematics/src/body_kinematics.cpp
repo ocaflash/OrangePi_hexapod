@@ -1,4 +1,5 @@
 #include "body_kinematics.hpp"
+#include <atomic>
 
 using namespace std::chrono_literals;
 
@@ -213,23 +214,33 @@ bool BodyKinematics::callServiceSync(KDL::Vector* vector) {
         return false;
     }
 
-    auto future = client_->async_send_request(request);
+    // Use callback-based approach with a flag
+    std::atomic<bool> done{false};
+    std::atomic<bool> success{false};
     
-    // Wait synchronously with timeout
-    auto status = future.wait_for(500ms);
-    if (status == std::future_status::ready) {
-        auto response = future.get();
-        if (response->error_codes == crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
-            for (size_t i = 0; i < num_legs_; i++) {
-                for (size_t j = 0; j < num_joints_; j++) {
-                    legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
+    auto future = client_->async_send_request(request,
+        [this, &done, &success](rclcpp::Client<crab_msgs::srv::GetLegIKSolver>::SharedFuture response_future) {
+            auto response = response_future.get();
+            if (response->error_codes == crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
+                for (size_t i = 0; i < num_legs_; i++) {
+                    for (size_t j = 0; j < num_joints_; j++) {
+                        legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
+                    }
                 }
+                joints_pub_->publish(legs_);
+                success = true;
             }
-            joints_pub_->publish(legs_);
-            return true;
-        }
+            done = true;
+        });
+
+    // Spin until done or timeout
+    auto start = std::chrono::steady_clock::now();
+    while (!done && (std::chrono::steady_clock::now() - start) < 500ms) {
+        rclcpp::spin_some(this->get_node_base_interface());
+        std::this_thread::sleep_for(5ms);
     }
-    return false;
+    
+    return success;
 }
 
 void BodyKinematics::teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr body_state) {
