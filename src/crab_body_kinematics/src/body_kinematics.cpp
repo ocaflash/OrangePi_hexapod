@@ -1,5 +1,4 @@
 #include "body_kinematics.hpp"
-#include <atomic>
 
 using namespace std::chrono_literals;
 
@@ -42,9 +41,15 @@ bool BodyKinematics::init() {
     body_cmd_sub_ = this->create_subscription<crab_msgs::msg::BodyCommand>(
         "/teleop/body_command", 1,
         std::bind(&BodyKinematics::teleopBodyCmd, this, std::placeholders::_1));
+    
+    // Timer for smooth stand/seat movements
+    motion_timer_ = this->create_wall_timer(
+        40ms, std::bind(&BodyKinematics::motionTimerCallback, this));
 
     bs_.leg_radius = 0.11;
     bs_.z = -0.016;
+    stand_up_active_ = false;
+    seat_down_active_ = false;
     
     // Ждём пока сервис IK станет доступен
     RCLCPP_INFO(this->get_logger(), "Waiting for leg IK service...");
@@ -131,32 +136,6 @@ bool BodyKinematics::calculateKinematics(crab_msgs::msg::BodyState* body_ptr) {
     return true;
 }
 
-bool BodyKinematics::calculateKinematicsSync(crab_msgs::msg::BodyState* body_ptr) {
-    // Body rotation
-    rotation_ = KDL::Rotation::RPY(body_ptr->roll, body_ptr->pitch, body_ptr->yaw);
-
-    // Distance from body center to leg tip
-    femur_frame_ = KDL::Frame(KDL::Vector(body_ptr->leg_radius, 0, 0));
-
-    // Offset from center
-    offset_vector_ = KDL::Vector(body_ptr->x, body_ptr->y, body_ptr->z);
-    rotate_correction_ = KDL::Vector(
-        body_ptr->z * tan(body_ptr->pitch),
-        -(body_ptr->z * tan(body_ptr->roll)),
-        0);
-
-    for (size_t i = 0; i < num_legs_; i++) {
-        tibia_foot_frame_ = frames_[i] * femur_frame_;
-        final_vector_[i] = (rotation_ * tibia_foot_frame_.p) + offset_vector_ + rotate_correction_;
-    }
-
-    if (!callServiceSync(final_vector_)) {
-        return false;
-    }
-
-    return true;
-}
-
 bool BodyKinematics::callService(KDL::Vector* vector) {
     auto request = std::make_shared<crab_msgs::srv::GetLegIKSolver::Request>();
     
@@ -196,53 +175,6 @@ bool BodyKinematics::callService(KDL::Vector* vector) {
     return true;
 }
 
-bool BodyKinematics::callServiceSync(KDL::Vector* vector) {
-    auto request = std::make_shared<crab_msgs::srv::GetLegIKSolver::Request>();
-    
-    for (size_t i = 0; i < num_legs_; i++) {
-        request->leg_number.push_back(i);
-        crab_msgs::msg::LegPositionState leg_pos_buf;
-        leg_pos_buf.x = vector[i].x();
-        leg_pos_buf.y = vector[i].y();
-        leg_pos_buf.z = vector[i].z();
-        request->target_position.push_back(leg_pos_buf);
-        request->current_joints.push_back(legs_.joints_state[i]);
-    }
-
-    if (!client_->service_is_ready()) {
-        RCLCPP_WARN(this->get_logger(), "Service not available");
-        return false;
-    }
-
-    // Use callback-based approach with a flag
-    std::atomic<bool> done{false};
-    std::atomic<bool> success{false};
-    
-    auto future = client_->async_send_request(request,
-        [this, &done, &success](rclcpp::Client<crab_msgs::srv::GetLegIKSolver>::SharedFuture response_future) {
-            auto response = response_future.get();
-            if (response->error_codes == crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
-                for (size_t i = 0; i < num_legs_; i++) {
-                    for (size_t j = 0; j < num_joints_; j++) {
-                        legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
-                    }
-                }
-                joints_pub_->publish(legs_);
-                success = true;
-            }
-            done = true;
-        });
-
-    // Spin until done or timeout
-    auto start = std::chrono::steady_clock::now();
-    while (!done && (std::chrono::steady_clock::now() - start) < 500ms) {
-        rclcpp::spin_some(this->get_node_base_interface());
-        std::this_thread::sleep_for(5ms);
-    }
-    
-    return success;
-}
-
 void BodyKinematics::teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr body_state) {
     bs_.x = body_state->x;
     bs_.y = body_state->y;
@@ -257,18 +189,33 @@ void BodyKinematics::teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr b
 void BodyKinematics::teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr body_cmd) {
     if (body_cmd->cmd == crab_msgs::msg::BodyCommand::STAND_UP_CMD) {
         RCLCPP_INFO(this->get_logger(), "STAND_UP_CMD");
-        while (bs_.z >= -z_) {
-            bs_.z -= 0.0025;
-            calculateKinematicsSync(&bs_);
-            std::this_thread::sleep_for(40ms);
-        }
+        // Start stand up sequence using timer
+        stand_up_active_ = true;
+        seat_down_active_ = false;
     }
     if (body_cmd->cmd == crab_msgs::msg::BodyCommand::SEAT_DOWN_CMD) {
         RCLCPP_INFO(this->get_logger(), "SEAT_DOWN_CMD");
-        while (bs_.z <= -0.016) {
+        // Start seat down sequence using timer
+        seat_down_active_ = true;
+        stand_up_active_ = false;
+    }
+}
+
+void BodyKinematics::motionTimerCallback() {
+    if (stand_up_active_) {
+        if (bs_.z >= -z_) {
+            bs_.z -= 0.0025;
+            calculateKinematics(&bs_);
+        } else {
+            stand_up_active_ = false;
+        }
+    }
+    if (seat_down_active_) {
+        if (bs_.z <= -0.016) {
             bs_.z += 0.0025;
-            calculateKinematicsSync(&bs_);
-            std::this_thread::sleep_for(40ms);
+            calculateKinematics(&bs_);
+        } else {
+            seat_down_active_ = false;
         }
     }
 }

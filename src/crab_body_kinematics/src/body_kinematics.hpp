@@ -34,14 +34,17 @@ private:
     rclcpp::Publisher<crab_msgs::msg::LegsJointsState>::SharedPtr joints_pub_;
     rclcpp::Subscription<crab_msgs::msg::BodyState>::SharedPtr body_move_sub_;
     rclcpp::Subscription<crab_msgs::msg::BodyCommand>::SharedPtr body_cmd_sub_;
+    rclcpp::TimerBase::SharedPtr motion_timer_;
+    
+    bool stand_up_active_;
+    bool seat_down_active_;
 
     bool loadModel(const std::string& xml);
     bool calculateKinematics(crab_msgs::msg::BodyState* body_ptr);
-    bool calculateKinematicsSync(crab_msgs::msg::BodyState* body_ptr);
     bool callService(KDL::Vector* vector);
-    bool callServiceSync(KDL::Vector* vector);
     void teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr body_state);
     void teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr body_cmd);
+    void motionTimerCallback();
 };
 
 #endif /* BODY_KINEMATICS_HPP_ */
