@@ -3,6 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joy.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 #include <crab_msgs/msg/body_state.hpp>
 #include <crab_msgs/msg/body_command.hpp>
 #include <crab_msgs/msg/gait_command.hpp>
@@ -49,6 +50,7 @@ private:
     crab_msgs::msg::GaitCommand gait_command_;
 
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr ds4_imu_sub_;
     rclcpp::Publisher<crab_msgs::msg::BodyState>::SharedPtr move_body_pub_;
     rclcpp::Publisher<crab_msgs::msg::BodyCommand>::SharedPtr body_cmd_pub_;
     rclcpp::Publisher<crab_msgs::msg::GaitCommand>::SharedPtr gait_cmd_pub_;
@@ -57,8 +59,11 @@ private:
     bool start_flag_;
     bool gait_flag_;
     bool imu_flag_;
+    bool gyro_button_pressed_;
+    double ds4_gyro_x_, ds4_gyro_y_, ds4_gyro_z_;
 
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy);
+    void ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu);
 
     // DualShock 4 mappings
     static constexpr int axis_body_roll_ = DS4_AXIS_LEFT_STICK_X;

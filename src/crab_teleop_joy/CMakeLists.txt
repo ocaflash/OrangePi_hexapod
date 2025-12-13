@@ -7,6 +7,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(crab_msgs REQUIRED)
 
+# Teleop joy node
 add_executable(teleop_joy src/teleop_joy.cpp)
 ament_target_dependencies(teleop_joy
   rclcpp
@@ -15,8 +16,16 @@ ament_target_dependencies(teleop_joy
   crab_msgs
 )
 
+# DS4 IMU publisher node
+add_executable(ds4_imu_publisher src/ds4_imu_publisher.cpp)
+ament_target_dependencies(ds4_imu_publisher
+  rclcpp
+  sensor_msgs
+)
+
 install(TARGETS
   teleop_joy
+  ds4_imu_publisher
   DESTINATION lib/${PROJECT_NAME}
 )
 

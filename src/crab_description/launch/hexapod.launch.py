@@ -68,6 +68,12 @@ def generate_launch_description():
             executable='teleop_joy',
         ),
         
+        # DS4 IMU Publisher (reads gyroscope from DualShock 4)
+        Node(
+            package='crab_teleop_joy',
+            executable='ds4_imu_publisher',
+        ),
+        
         # Maestro Servo Driver
         Node(
             package='maestro_driver',

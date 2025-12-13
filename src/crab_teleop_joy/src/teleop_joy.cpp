@@ -1,5 +1,6 @@
 #include "teleop_joy.hpp"
 #include <cmath>
+#include <algorithm>
 
 using namespace std::chrono_literals;
 
@@ -11,7 +12,9 @@ inline float applyDeadzone(float value) {
     return (std::abs(value) < DEADZONE) ? 0.0f : value;
 }
 
-TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(false), imu_flag_(false) {
+TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(false), 
+                         imu_flag_(false), gyro_button_pressed_(false),
+                         ds4_gyro_x_(0), ds4_gyro_y_(0), ds4_gyro_z_(0) {
     this->declare_parameter<double>("clearance", 0.045);
     z_ = this->get_parameter("clearance").as_double();
 
@@ -20,11 +23,32 @@ TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(fals
 
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
         "joy", 1, std::bind(&TeleopJoy::joyCallback, this, std::placeholders::_1));
+    
+    // Subscribe to DS4 IMU data from ds4_imu_publisher node
+    ds4_imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+        "/ds4/imu", 10, std::bind(&TeleopJoy::ds4ImuCallback, this, std::placeholders::_1));
+    
     move_body_pub_ = this->create_publisher<crab_msgs::msg::BodyState>("/teleop/move_body", 1);
     body_cmd_pub_ = this->create_publisher<crab_msgs::msg::BodyCommand>("/teleop/body_command", 1);
     gait_cmd_pub_ = this->create_publisher<crab_msgs::msg::GaitCommand>("/teleop/gait_control", 1);
 
-    RCLCPP_INFO(this->get_logger(), "Starting PS3 teleop converter, take care of your controller now...");
+    RCLCPP_INFO(this->get_logger(), "Starting DS4 teleop converter...");
+    RCLCPP_INFO(this->get_logger(), "Hold Square button and tilt controller for gyro control");
+}
+
+void TeleopJoy::ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu) {
+    ds4_gyro_x_ = imu->angular_velocity.x;
+    ds4_gyro_y_ = imu->angular_velocity.y;
+    ds4_gyro_z_ = imu->angular_velocity.z;
+    
+    // If gyro button is pressed and robot is standing, use gyro for body control
+    if (gyro_button_pressed_ && start_flag_) {
+        // Integrate gyro to get orientation (simple approach)
+        // Scale factors tuned for natural feel
+        body_state_.roll = std::clamp(ds4_gyro_x_ * 0.1, -0.3, 0.3);
+        body_state_.pitch = std::clamp(-ds4_gyro_y_ * 0.1, -0.3, 0.3);
+        move_body_pub_->publish(body_state_);
+    }
 }
 
 void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
@@ -75,17 +99,9 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             move_body_pub_->publish(body_state_);
         }
         // RPY Signal via controller gyroscope (Square held)
-        // Check if gyro axes are available (axes array size > 8)
-        if (joy->buttons[button_gyro_control_] && joy->axes.size() > static_cast<size_t>(axis_gyro_roll_)) {
-            // Use controller orientation to control robot body
-            // Scale factors tuned for natural feel
-            body_state_.roll = 0.3 * joy->axes[axis_gyro_roll_];
-            body_state_.pitch = -0.3 * joy->axes[axis_gyro_pitch_];
-            body_state_.yaw = 0;  // Yaw from gyro is less intuitive, skip it
-            move_body_pub_->publish(body_state_);
-            RCLCPP_DEBUG(this->get_logger(), "Gyro control: roll=%.2f pitch=%.2f", 
-                         body_state_.roll, body_state_.pitch);
-        }
+        // Gyro data comes from ds4_imu_publisher via /ds4/imu topic
+        gyro_button_pressed_ = joy->buttons[button_gyro_control_];
+        // Note: actual gyro control happens in ds4ImuCallback when button is pressed
         // Offset Signal (R1 held)
         if (joy->buttons[button_right_shift_]) {
             body_state_.y = -0.05 * joy->axes[axis_body_y_off_];
