@@ -29,6 +29,8 @@ public:
 
         if (maestro_ && maestro_->isOpen()) {
             RCLCPP_INFO(this->get_logger(), "Maestro servo controller connected on %s", port_name.c_str());
+            // Initialize all servos to neutral position (0 degrees = 127 in MSS)
+            initializeServos();
         } else {
             RCLCPP_ERROR(this->get_logger(), "Failed to open Maestro on %s", port_name.c_str());
         }
@@ -47,6 +49,17 @@ public:
     }
 
 private:
+    void initializeServos() {
+        if (!maestro_ || !maestro_->isOpen()) return;
+        
+        RCLCPP_INFO(this->get_logger(), "Initializing all servos to neutral position...");
+        // 127 = neutral position (0 degrees) in Mini SSC protocol
+        for (int i = 0; i < 18; i++) {
+            maestro_->setTargetMSS(i, 127);
+        }
+        RCLCPP_INFO(this->get_logger(), "Servos initialized");
+    }
+
     void chatterLegsState(const crab_msgs::msg::LegsJointsState::SharedPtr legs_jnts) {
         if (!maestro_ || !maestro_->isOpen()) return;
 
