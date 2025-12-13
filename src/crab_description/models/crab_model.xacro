@@ -1,6 +1,22 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="crab">
 
+<!-- ============================================================================ -->
+<!-- РАЗМЕРЫ ЗВЕНЬЕВ НОГИ (в метрах) -->
+<!-- ============================================================================ -->
+	<xacro:property name="coxa_length" value="0.025" />   <!-- 25 мм: ось coxa → ось femur -->
+	<xacro:property name="femur_length" value="0.077" />  <!-- 77 мм: ось femur → ось tibia -->
+	<xacro:property name="tibia_length" value="0.120" />  <!-- 120 мм: ось tibia → кончик -->
+	<!-- Суммарная длина ноги: 0.025 + 0.077 + 0.120 = 0.222 м -->
+
+<!-- ============================================================================ -->
+<!-- ГЕОМЕТРИЯ ТЕЛА -->
+<!-- ============================================================================ -->
+	<!-- Позиции крепления ног (leg_center) относительно центра тела -->
+	<xacro:property name="body_front_x" value="0.087598" />
+	<xacro:property name="body_side_y" value="0.050575" />
+	<xacro:property name="body_mid_y" value="0.06985" />
+
 <!-- Build the body frame -->
 	<link name="base_link" />
 
@@ -21,8 +37,6 @@
       			</material>
     		</visual>
 	</link>
-
-<!-- Pi is already defined globally in xacro, using it directly -->
 
 <!-- Joint properties -->
 	<xacro:property name="joint_lower_limit" value="-${1.5}" />
@@ -63,7 +77,7 @@
   	</link>
 
   	<joint name="femur_joint_${side}${num}" type="revolute">
-    		<origin xyz="0.0294 0 0" rpy="-${pi/2} 0 0" />
+    		<origin xyz="${coxa_length} 0 0" rpy="-${pi/2} 0 0" />
     		<parent link="coxa_${side}${num}" />
     		<child link="femur_${side}${num}" />
     		<axis xyz="0 0 -1" />
@@ -83,7 +97,7 @@
   	</link>
 
   	<joint name="tibia_joint_${side}${num}" type="revolute">
-    		<origin xyz="0.08 0 0" rpy="${pi} 0 ${pi/2}" />
+    		<origin xyz="${femur_length} 0 0" rpy="${pi} 0 ${pi/2}" />
     		<parent link="femur_${side}${num}" />
     		<child link="tibia_${side}${num}" />
     		<axis xyz="0 0 1" />
@@ -103,7 +117,7 @@
   	</link>
 
   	<joint name="tibia_foot_joint_${side}${num}" type="fixed">
-    		<origin xyz="0.117 0 0" rpy="0 0 0" />
+    		<origin xyz="${tibia_length} 0 0" rpy="0 0 0" />
     		<parent link="tibia_${side}${num}" />
     		<child link="tibia_foot_${side}${num}" />
   	</joint>

@@ -25,6 +25,9 @@ private:
     static constexpr unsigned int num_joints_ = NUM_JOINTS;
     static constexpr unsigned int num_legs_ = NUM_LEGS;
     double z_;
+    double leg_radius_;
+    double seat_height_;
+    double stand_step_;
 
     KDL::Rotation rotation_;
     KDL::Frame tibia_foot_frame_, femur_frame_;

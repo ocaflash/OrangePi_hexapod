@@ -10,6 +10,9 @@ BodyKinematics::BodyKinematics() : Node("body_kinematics") {
     this->declare_parameter<std::string>("root_name_body", "leg_center");
     this->declare_parameter<std::string>("tip_name_body", "coxa");
     this->declare_parameter<double>("clearance", 0.045);
+    this->declare_parameter<double>("leg_radius", 0.11);
+    this->declare_parameter<double>("seat_height", 0.016);
+    this->declare_parameter<double>("stand_step", 0.0025);
 }
 
 bool BodyKinematics::init() {
@@ -26,6 +29,9 @@ bool BodyKinematics::init() {
     root_name_ = this->get_parameter("root_name_body").as_string();
     tip_name_ = this->get_parameter("tip_name_body").as_string();
     z_ = this->get_parameter("clearance").as_double();
+    leg_radius_ = this->get_parameter("leg_radius").as_double();
+    seat_height_ = this->get_parameter("seat_height").as_double();
+    stand_step_ = this->get_parameter("stand_step").as_double();
 
     // Load and Read Models
     if (!loadModel(robot_desc_string)) {
@@ -46,8 +52,8 @@ bool BodyKinematics::init() {
     motion_timer_ = this->create_wall_timer(
         40ms, std::bind(&BodyKinematics::motionTimerCallback, this));
 
-    bs_.leg_radius = 0.11;
-    bs_.z = -0.016;
+    bs_.leg_radius = leg_radius_;
+    bs_.z = -seat_height_;
     stand_up_active_ = false;
     seat_down_active_ = false;
     
@@ -204,7 +210,7 @@ void BodyKinematics::teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr 
 void BodyKinematics::motionTimerCallback() {
     if (stand_up_active_) {
         if (bs_.z >= -z_) {
-            bs_.z -= 0.0025;
+            bs_.z -= stand_step_;
             RCLCPP_INFO(this->get_logger(), "Stand up: z=%.4f, target=-%.4f, leg0: x=%.4f y=%.4f z=%.4f",
                         bs_.z, z_, final_vector_[0].x(), final_vector_[0].y(), final_vector_[0].z());
             calculateKinematics(&bs_);
@@ -214,8 +220,8 @@ void BodyKinematics::motionTimerCallback() {
         }
     }
     if (seat_down_active_) {
-        if (bs_.z <= -0.016) {
-            bs_.z += 0.0025;
+        if (bs_.z <= -seat_height_) {
+            bs_.z += stand_step_;
             calculateKinematics(&bs_);
         } else {
             seat_down_active_ = false;

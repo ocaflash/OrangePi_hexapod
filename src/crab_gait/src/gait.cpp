@@ -9,11 +9,14 @@ Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0)
     legs_queue_.push(1);
 }
 
-void Gait::setTrapezoid(double low_r, double high_r, double h, double z) {
+void Gait::setTrapezoid(double low_r, double high_r, double h, double z,
+                        double path_tolerance, double rounded_radius) {
     low_rad_ = low_r;
     high_rad_ = high_r;
     height_ = z - h;
     z_body_ = z;
+    path_tolerance_ = path_tolerance;
+    rounded_radius_ = rounded_radius;
 }
 
 void Gait::setFi(double fi) {
@@ -31,9 +34,9 @@ void Gait::setAlpha(double alpha) {
 }
 
 void Gait::setPath() {
-    path_support_ = new KDL::Path_Line(d, a, &rot_, 0.005, true);
+    path_support_ = new KDL::Path_Line(d, a, &rot_, path_tolerance_, true);
 
-    path_transfer_ = new KDL::Path_RoundedComposite(0.02, 0.005, &rot_);
+    path_transfer_ = new KDL::Path_RoundedComposite(rounded_radius_, path_tolerance_, &rot_);
     path_transfer_->Add(a);
     path_transfer_->Add(b);
     path_transfer_->Add(c);

@@ -16,7 +16,8 @@
 class Gait {
 public:
     Gait();
-    void setTrapezoid(double low_rad, double high_rad, double height, double z);
+    void setTrapezoid(double low_rad, double high_rad, double height, double z,
+                      double path_tolerance = 0.005, double rounded_radius = 0.02);
     KDL::Vector* RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration);
     KDL::Vector* RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration);
     void Pause();
@@ -40,6 +41,7 @@ private:
     int phase_;
     double passed_sec_, begin_sec_;
     double low_rad_, high_rad_, height_, z_body_;
+    double path_tolerance_, rounded_radius_;
     KDL::Vector final_vector_[NUM_LEGS];
     KDL::RotationalInterpolation_SingleAxis rot_;
     KDL::Path_Line *path_support_;

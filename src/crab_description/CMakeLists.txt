@@ -8,6 +8,7 @@ install(DIRECTORY
   models
   launch
   rviz
+  config
   DESTINATION share/${PROJECT_NAME}
 )
 

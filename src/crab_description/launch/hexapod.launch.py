@@ -1,4 +1,5 @@
 import os
+import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
@@ -8,8 +9,13 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     pkg_share = get_package_share_directory('crab_description')
     xacro_file = os.path.join(pkg_share, 'models', 'crab_model.xacro')
+    config_file = os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
     
     robot_description = Command(['xacro ', xacro_file], on_stderr='ignore')
+    
+    # Загрузка конфига геометрии
+    with open(config_file, 'r') as f:
+        geometry_config = yaml.safe_load(f)
     
     # Аргумент для порта Maestro
     port_name_arg = DeclareLaunchArgument(
@@ -40,14 +46,31 @@ def generate_launch_description():
         Node(
             package='crab_body_kinematics',
             executable='body_kinematics',
-            parameters=[{'robot_description': robot_description}],
+            parameters=[
+                {'robot_description': robot_description},
+                {'leg_radius': geometry_config['workspace']['leg_radius']},
+                {'clearance': geometry_config['body_positions']['clearance']},
+                {'seat_height': geometry_config['body_positions']['seat_height']},
+                {'stand_step': geometry_config['body_positions']['stand_step']},
+            ],
         ),
         
         # Gait Generator
         Node(
             package='crab_gait',
             executable='gait_kinematics',
-            parameters=[{'robot_description': robot_description}],
+            parameters=[
+                {'robot_description': robot_description},
+                {'leg_radius': geometry_config['workspace']['leg_radius']},
+                {'clearance': geometry_config['body_positions']['clearance']},
+                {'trapezoid_low_radius': geometry_config['gait']['trapezoid']['low_radius']},
+                {'trapezoid_high_radius': geometry_config['gait']['trapezoid']['high_radius']},
+                {'trapezoid_h': geometry_config['gait']['trapezoid']['height']},
+                {'path_tolerance': geometry_config['gait']['path']['tolerance']},
+                {'rounded_radius': geometry_config['gait']['path']['rounded_radius']},
+                {'duration_ripple': geometry_config['gait']['timing']['ripple_duration']},
+                {'duration_tripod': geometry_config['gait']['timing']['tripod_duration']},
+            ],
         ),
         
         # Joint Publisher (для визуализации)

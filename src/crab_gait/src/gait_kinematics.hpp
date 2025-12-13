@@ -33,6 +33,8 @@ private:
     static constexpr unsigned int num_legs_ = NUM_LEGS;
     double trap_low_r_, trap_high_r_, trap_h_, trap_z_;
     double d_ripple_, d_tripod_;
+    double leg_radius_;
+    double path_tolerance_, rounded_radius_;
 
     rclcpp::Client<crab_msgs::srv::GetLegIKSolver>::SharedPtr client_;
     rclcpp::Publisher<crab_msgs::msg::LegsJointsState>::SharedPtr joints_pub_;

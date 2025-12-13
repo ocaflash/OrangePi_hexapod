@@ -14,6 +14,9 @@ GaitKinematics::GaitKinematics() : Node("gait_kinematics") {
     this->declare_parameter<double>("clearance", 0.045);
     this->declare_parameter<double>("duration_ripple", 1.5);
     this->declare_parameter<double>("duration_tripod", 1.0);
+    this->declare_parameter<double>("leg_radius", 0.11);
+    this->declare_parameter<double>("path_tolerance", 0.005);
+    this->declare_parameter<double>("rounded_radius", 0.02);
 
     gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
 }
@@ -36,6 +39,9 @@ bool GaitKinematics::init() {
     trap_z_ = this->get_parameter("clearance").as_double();
     d_ripple_ = this->get_parameter("duration_ripple").as_double();
     d_tripod_ = this->get_parameter("duration_tripod").as_double();
+    leg_radius_ = this->get_parameter("leg_radius").as_double();
+    path_tolerance_ = this->get_parameter("path_tolerance").as_double();
+    rounded_radius_ = this->get_parameter("rounded_radius").as_double();
 
     if (!loadModel(robot_desc_string)) {
         RCLCPP_FATAL(this->get_logger(), "Could not load models!");
@@ -54,7 +60,7 @@ bool GaitKinematics::init() {
 void GaitKinematics::gaitGenerator() {
     KDL::Vector* final_vector;
     Gait gait;
-    gait.setTrapezoid(trap_low_r_, trap_high_r_, trap_h_, trap_z_);
+    gait.setTrapezoid(trap_low_r_, trap_high_r_, trap_h_, trap_z_, path_tolerance_, rounded_radius_);
 
     rclcpp::Rate rate(25);
     while (rclcpp::ok()) {
@@ -151,7 +157,7 @@ bool GaitKinematics::loadModel(const std::string& xml) {
     RCLCPP_INFO(this->get_logger(), "Get frames");
 
     for (size_t i = 0; i < num_legs_; i++) {
-        frames_[i] = frames_[i] * frames_[i + num_legs_] * KDL::Frame(KDL::Vector(0.11, 0, 0));
+        frames_[i] = frames_[i] * frames_[i + num_legs_] * KDL::Frame(KDL::Vector(leg_radius_, 0, 0));
     }
     frames_.resize(num_legs_);
 
