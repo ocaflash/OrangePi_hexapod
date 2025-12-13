@@ -95,6 +95,9 @@ void LegKinematics::getLegIKSolver(const std::shared_ptr<crab_msgs::srv::GetLegI
             jnt_pos_in(j) = request->current_joints[i].joint[j];
         }
         KDL::Frame F_dest(KDL::Vector(leg_dest_pos.x, leg_dest_pos.y, leg_dest_pos.z));
+        
+        RCLCPP_DEBUG(this->get_logger(), "IK request leg %zu: x=%.4f y=%.4f z=%.4f", 
+                     request->leg_number[i], leg_dest_pos.x, leg_dest_pos.y, leg_dest_pos.z);
 
         int ik_valid = ik_solver_pos_[request->leg_number[i]]->CartToJnt(jnt_pos_in, F_dest, jnt_pos_out);
 
