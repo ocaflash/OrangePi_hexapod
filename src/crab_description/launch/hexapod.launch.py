@@ -43,12 +43,12 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_description}],
         ),
         
-        # Gait Generator (отключен для отладки)
-        # Node(
-        #     package='crab_gait',
-        #     executable='gait_kinematics',
-        #     parameters=[{'robot_description': robot_description}],
-        # ),
+        # Gait Generator
+        Node(
+            package='crab_gait',
+            executable='gait_kinematics',
+            parameters=[{'robot_description': robot_description}],
+        ),
         
         # Joint Publisher (для визуализации)
         Node(
