@@ -16,14 +16,16 @@ public:
     MaestroController() : Node("maestro_servo_node") {
         this->declare_parameter<double>("joint_lower_limit", -1.570796327);
         this->declare_parameter<double>("joint_upper_limit", 1.570796327);
-        this->declare_parameter<std::string>("port_name", "/dev/ttyACM0");
+        this->declare_parameter<std::string>("port_name", "/dev/ttyS5");
+        this->declare_parameter<int>("baud_rate", 115200);
 
         joint_lower_limit_ = this->get_parameter("joint_lower_limit").as_double();
         joint_upper_limit_ = this->get_parameter("joint_upper_limit").as_double();
         limit_coef_ = 127 / ((joint_upper_limit_ - joint_lower_limit_) / 2);
 
         std::string port_name = this->get_parameter("port_name").as_string();
-        maestro_ = Polstro::SerialInterface::createSerialInterface(port_name, 9600);
+        int baud_rate = this->get_parameter("baud_rate").as_int();
+        maestro_ = Polstro::SerialInterface::createSerialInterface(port_name, baud_rate);
 
         if (maestro_ && maestro_->isOpen()) {
             RCLCPP_INFO(this->get_logger(), "Maestro servo controller connected on %s", port_name.c_str());
