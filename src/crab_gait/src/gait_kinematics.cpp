@@ -15,7 +15,7 @@ GaitKinematics::GaitKinematics() : Node("gait_kinematics") {
     this->declare_parameter<double>("duration_ripple", 1.5);
     this->declare_parameter<double>("duration_tripod", 1.0);
 
-    gait_command_.cmd = 0;
+    gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
 }
 
 bool GaitKinematics::init() {
