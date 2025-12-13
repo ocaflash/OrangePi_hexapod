@@ -132,8 +132,9 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             gait_cmd_pub_->publish(gait_command_);
         }
     } else {
+        // Leg radius adjustment when seated (L2 held)
         if (joy->buttons[button_right_shift_2_] && !imu_flag_) {
-            body_state_.z = -0.01;
+            body_state_.z = -0.016;  // Seated position (was -0.01 which caused IK errors)
             body_state_.leg_radius = 0.06 * joy->axes[axis_body_yaw_] + 0.11;
             move_body_pub_->publish(body_state_);
         }
