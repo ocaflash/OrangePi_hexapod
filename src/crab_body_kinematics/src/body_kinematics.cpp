@@ -130,6 +130,32 @@ bool BodyKinematics::calculateKinematics(crab_msgs::msg::BodyState* body_ptr) {
     return true;
 }
 
+bool BodyKinematics::calculateKinematicsSync(crab_msgs::msg::BodyState* body_ptr) {
+    // Body rotation
+    rotation_ = KDL::Rotation::RPY(body_ptr->roll, body_ptr->pitch, body_ptr->yaw);
+
+    // Distance from body center to leg tip
+    femur_frame_ = KDL::Frame(KDL::Vector(body_ptr->leg_radius, 0, 0));
+
+    // Offset from center
+    offset_vector_ = KDL::Vector(body_ptr->x, body_ptr->y, body_ptr->z);
+    rotate_correction_ = KDL::Vector(
+        body_ptr->z * tan(body_ptr->pitch),
+        -(body_ptr->z * tan(body_ptr->roll)),
+        0);
+
+    for (size_t i = 0; i < num_legs_; i++) {
+        tibia_foot_frame_ = frames_[i] * femur_frame_;
+        final_vector_[i] = (rotation_ * tibia_foot_frame_.p) + offset_vector_ + rotate_correction_;
+    }
+
+    if (!callServiceSync(final_vector_)) {
+        return false;
+    }
+
+    return true;
+}
+
 bool BodyKinematics::callService(KDL::Vector* vector) {
     auto request = std::make_shared<crab_msgs::srv::GetLegIKSolver::Request>();
     
@@ -169,6 +195,43 @@ bool BodyKinematics::callService(KDL::Vector* vector) {
     return true;
 }
 
+bool BodyKinematics::callServiceSync(KDL::Vector* vector) {
+    auto request = std::make_shared<crab_msgs::srv::GetLegIKSolver::Request>();
+    
+    for (size_t i = 0; i < num_legs_; i++) {
+        request->leg_number.push_back(i);
+        crab_msgs::msg::LegPositionState leg_pos_buf;
+        leg_pos_buf.x = vector[i].x();
+        leg_pos_buf.y = vector[i].y();
+        leg_pos_buf.z = vector[i].z();
+        request->target_position.push_back(leg_pos_buf);
+        request->current_joints.push_back(legs_.joints_state[i]);
+    }
+
+    if (!client_->service_is_ready()) {
+        RCLCPP_WARN(this->get_logger(), "Service not available");
+        return false;
+    }
+
+    auto future = client_->async_send_request(request);
+    
+    // Wait synchronously with timeout
+    auto status = future.wait_for(500ms);
+    if (status == std::future_status::ready) {
+        auto response = future.get();
+        if (response->error_codes == crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
+            for (size_t i = 0; i < num_legs_; i++) {
+                for (size_t j = 0; j < num_joints_; j++) {
+                    legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
+                }
+            }
+            joints_pub_->publish(legs_);
+            return true;
+        }
+    }
+    return false;
+}
+
 void BodyKinematics::teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr body_state) {
     bs_.x = body_state->x;
     bs_.y = body_state->y;
@@ -183,20 +246,18 @@ void BodyKinematics::teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr b
 void BodyKinematics::teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr body_cmd) {
     if (body_cmd->cmd == crab_msgs::msg::BodyCommand::STAND_UP_CMD) {
         RCLCPP_INFO(this->get_logger(), "STAND_UP_CMD");
-        rclcpp::Rate r(25);
         while (bs_.z >= -z_) {
             bs_.z -= 0.0025;
-            r.sleep();
-            calculateKinematics(&bs_);
+            calculateKinematicsSync(&bs_);
+            std::this_thread::sleep_for(40ms);
         }
     }
     if (body_cmd->cmd == crab_msgs::msg::BodyCommand::SEAT_DOWN_CMD) {
         RCLCPP_INFO(this->get_logger(), "SEAT_DOWN_CMD");
-        rclcpp::Rate r(25);
         while (bs_.z <= -0.016) {
             bs_.z += 0.0025;
-            r.sleep();
-            calculateKinematics(&bs_);
+            calculateKinematicsSync(&bs_);
+            std::this_thread::sleep_for(40ms);
         }
     }
 }
