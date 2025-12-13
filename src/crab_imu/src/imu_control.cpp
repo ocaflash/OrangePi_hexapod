@@ -113,7 +113,7 @@ private:
 
   void teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr body_cmd)
   {
-    if (body_cmd->cmd == crab_msgs::msg::BodyCommand::STAND_UP_CMD + 2) { // IMU_START_CMD = 3
+    if (body_cmd->cmd == crab_msgs::msg::BodyCommand::IMU_START_CMD) {
       setup_IMU();
       rclcpp::Rate r(25);
       while (body_state_.z >= -0.08) {
@@ -123,7 +123,7 @@ private:
       }
       imu_on_ = true;
     }
-    if (body_cmd->cmd == crab_msgs::msg::BodyCommand::STAND_UP_CMD + 3) { // IMU_STOP_CMD = 4
+    if (body_cmd->cmd == crab_msgs::msg::BodyCommand::IMU_STOP_CMD) {
       rclcpp::Rate r(25);
       body_state_.roll = 0;
       body_state_.pitch = 0;
