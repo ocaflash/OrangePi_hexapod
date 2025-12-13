@@ -67,14 +67,26 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
     }
 
     if (start_flag_) {
-        // RPY Signal
+        // RPY Signal via sticks (L1 held)
         if (joy->buttons[button_left_shift_]) {
             body_state_.roll = 0.25 * joy->axes[axis_body_roll_];
             body_state_.pitch = -0.25 * joy->axes[axis_body_pitch_];
             body_state_.yaw = -0.28 * joy->axes[axis_body_yaw_];
             move_body_pub_->publish(body_state_);
         }
-        // Offset Signal
+        // RPY Signal via controller gyroscope (Square held)
+        // Check if gyro axes are available (axes array size > 8)
+        if (joy->buttons[button_gyro_control_] && joy->axes.size() > static_cast<size_t>(axis_gyro_roll_)) {
+            // Use controller orientation to control robot body
+            // Scale factors tuned for natural feel
+            body_state_.roll = 0.3 * joy->axes[axis_gyro_roll_];
+            body_state_.pitch = -0.3 * joy->axes[axis_gyro_pitch_];
+            body_state_.yaw = 0;  // Yaw from gyro is less intuitive, skip it
+            move_body_pub_->publish(body_state_);
+            RCLCPP_DEBUG(this->get_logger(), "Gyro control: roll=%.2f pitch=%.2f", 
+                         body_state_.roll, body_state_.pitch);
+        }
+        // Offset Signal (R1 held)
         if (joy->buttons[button_right_shift_]) {
             body_state_.y = -0.05 * joy->axes[axis_body_y_off_];
             body_state_.x = -0.05 * joy->axes[axis_body_x_off_];

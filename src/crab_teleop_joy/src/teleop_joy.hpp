@@ -31,6 +31,13 @@
 #define DS4_AXIS_R2                  5   // Trigger
 #define DS4_AXIS_DPAD_X              6   // D-pad Left/Right
 #define DS4_AXIS_DPAD_Y              7   // D-pad Up/Down
+// DS4 IMU axes (if available via ds4drv or extended driver)
+#define DS4_AXIS_GYRO_PITCH          8   // Gyroscope pitch
+#define DS4_AXIS_GYRO_YAW            9   // Gyroscope yaw
+#define DS4_AXIS_GYRO_ROLL           10  // Gyroscope roll
+#define DS4_AXIS_ACCEL_X             11  // Accelerometer X
+#define DS4_AXIS_ACCEL_Y             12  // Accelerometer Y
+#define DS4_AXIS_ACCEL_Z             13  // Accelerometer Z
 
 class TeleopJoy : public rclcpp::Node {
 public:
@@ -70,6 +77,12 @@ private:
     static constexpr int axis_alpha_ = DS4_AXIS_RIGHT_STICK_X;
     static constexpr int axis_scale_ = DS4_AXIS_RIGHT_STICK_Y;
     static constexpr int button_imu_ = DS4_BUTTON_CROSS;
+    
+    // Gyroscope control button (hold to use controller tilt for body orientation)
+    static constexpr int button_gyro_control_ = DS4_BUTTON_SQUARE;  // Square button
+    // Gyroscope axes (check with ros2 topic echo /joy if available)
+    static constexpr int axis_gyro_pitch_ = DS4_AXIS_GYRO_PITCH;
+    static constexpr int axis_gyro_roll_ = DS4_AXIS_GYRO_ROLL;
 };
 
 #endif /* TELEOP_JOY_HPP_ */
