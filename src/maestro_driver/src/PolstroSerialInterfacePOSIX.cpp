@@ -32,6 +32,31 @@ int SerialInterfacePOSIX::openPort(const std::string& portName) {
         perror(portName.c_str());
         return -1;
     }
+    
+    // Configure serial port
+    struct termios options;
+    tcgetattr(fd, &options);
+    
+    // Set baud rate to 115200
+    cfsetispeed(&options, B115200);
+    cfsetospeed(&options, B115200);
+    
+    // 8N1 mode
+    options.c_cflag &= ~PARENB;  // No parity
+    options.c_cflag &= ~CSTOPB;  // 1 stop bit
+    options.c_cflag &= ~CSIZE;
+    options.c_cflag |= CS8;      // 8 data bits
+    
+    // Enable receiver, ignore modem control lines
+    options.c_cflag |= (CLOCAL | CREAD);
+    
+    // Raw input/output
+    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    options.c_iflag &= ~(IXON | IXOFF | IXANY);
+    options.c_oflag &= ~OPOST;
+    
+    tcsetattr(fd, TCSANOW, &options);
+    
     return fd;
 }
 
