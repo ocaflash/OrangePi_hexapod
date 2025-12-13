@@ -43,10 +43,10 @@ void TeleopJoy::ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu) {
     
     // If gyro button is pressed and robot is standing, use gyro for body control
     if (gyro_button_pressed_ && start_flag_) {
-        // Integrate gyro to get orientation (simple approach)
-        // Scale factors tuned for natural feel
-        body_state_.roll = std::clamp(ds4_gyro_x_ * 0.1, -0.3, 0.3);
-        body_state_.pitch = std::clamp(-ds4_gyro_y_ * 0.1, -0.3, 0.3);
+        // Scale factors reduced for smaller amplitude
+        // Max tilt ~0.15 rad (~8.5 degrees)
+        body_state_.roll = std::clamp(ds4_gyro_x_ * 0.02, -0.15, 0.15);
+        body_state_.pitch = std::clamp(-ds4_gyro_y_ * 0.02, -0.15, 0.15);
         move_body_pub_->publish(body_state_);
     }
 }
