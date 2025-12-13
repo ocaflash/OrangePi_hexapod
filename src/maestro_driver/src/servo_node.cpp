@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <crab_msgs/msg/legs_joints_state.hpp>
+#include <algorithm>
 #include "PolstroSerialInterface.h"
 
 const int rotation_direction[18] = {
@@ -61,7 +62,10 @@ private:
     }
 
     void chatterLegsState(const crab_msgs::msg::LegsJointsState::SharedPtr legs_jnts) {
-        if (!maestro_ || !maestro_->isOpen()) return;
+        if (!maestro_ || !maestro_->isOpen()) {
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Maestro not open");
+            return;
+        }
 
         float target_value;
         int s_num;
@@ -70,9 +74,12 @@ private:
             for (int j = 0; j < num_joints_; j++) {
                 s_num = i * 3 + j;
                 target_value = 127 + rotation_direction[s_num] * legs_jnts->joints_state[i].joint[j] * limit_coef_;
-                maestro_->setTargetMSS(s_num, static_cast<unsigned char>(target_value));
+                unsigned char target_byte = static_cast<unsigned char>(std::clamp(target_value, 0.0f, 254.0f));
+                maestro_->setTargetMSS(s_num, target_byte);
             }
         }
+        RCLCPP_DEBUG(this->get_logger(), "Sent servo commands, ch0=%.1f", 
+                     127 + rotation_direction[0] * legs_jnts->joints_state[0].joint[0] * limit_coef_);
     }
 
     Polstro::SerialInterface* maestro_;
