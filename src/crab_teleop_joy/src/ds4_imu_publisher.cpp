@@ -51,6 +51,8 @@ private:
         if (!dir) return "";
         
         struct dirent* entry;
+        std::string fallback_device;
+        
         while ((entry = readdir(dir)) != nullptr) {
             if (strncmp(entry->d_name, "event", 5) != 0) continue;
             
@@ -61,20 +63,30 @@ private:
             char name[256] = {0};
             if (ioctl(fd, EVIOCGNAME(sizeof(name)), name) >= 0) {
                 std::string devName(name);
-                // Look for DS4 motion sensors device
-                if (devName.find("Motion Sensors") != std::string::npos ||
-                    devName.find("Sony Interactive Entertainment") != std::string::npos) {
+                RCLCPP_DEBUG(this->get_logger(), "Checking device: %s (%s)", path.c_str(), name);
+                
+                // Prefer "Motion Sensors" device specifically
+                if (devName.find("Motion Sensors") != std::string::npos) {
                     close(fd);
                     closedir(dir);
-                    RCLCPP_INFO(this->get_logger(), "Found DS4 IMU device: %s (%s)", 
+                    RCLCPP_INFO(this->get_logger(), "Found DS4 Motion Sensors: %s (%s)", 
                                 path.c_str(), name);
                     return path;
+                }
+                // Keep Sony device as fallback
+                if (devName.find("Sony") != std::string::npos && fallback_device.empty()) {
+                    fallback_device = path;
                 }
             }
             close(fd);
         }
         closedir(dir);
-        return "";
+        
+        if (!fallback_device.empty()) {
+            RCLCPP_WARN(this->get_logger(), "Motion Sensors not found, using fallback: %s", 
+                        fallback_device.c_str());
+        }
+        return fallback_device;
     }
     
     void openDevice(const std::string& device) {
@@ -133,23 +145,29 @@ private:
             }
         }
         
-        if (updated) {
-            auto msg = sensor_msgs::msg::Imu();
-            msg.header.stamp = this->now();
-            msg.header.frame_id = "ds4_imu";
-            
-            msg.angular_velocity.x = gyro_x_;
-            msg.angular_velocity.y = gyro_y_;
-            msg.angular_velocity.z = gyro_z_;
-            
-            msg.linear_acceleration.x = accel_x_;
-            msg.linear_acceleration.y = accel_y_;
-            msg.linear_acceleration.z = accel_z_;
-            
-            // Orientation not provided
-            msg.orientation_covariance[0] = -1;
-            
-            imu_pub_->publish(msg);
+        // Always publish at timer rate (even if no new events)
+        auto msg = sensor_msgs::msg::Imu();
+        msg.header.stamp = this->now();
+        msg.header.frame_id = "ds4_imu";
+        
+        msg.angular_velocity.x = gyro_x_;
+        msg.angular_velocity.y = gyro_y_;
+        msg.angular_velocity.z = gyro_z_;
+        
+        msg.linear_acceleration.x = accel_x_;
+        msg.linear_acceleration.y = accel_y_;
+        msg.linear_acceleration.z = accel_z_;
+        
+        // Orientation not provided
+        msg.orientation_covariance[0] = -1;
+        
+        imu_pub_->publish(msg);
+        
+        // Debug logging every second
+        static int log_counter = 0;
+        if (++log_counter >= 100) {
+            log_counter = 0;
+            RCLCPP_DEBUG(this->get_logger(), "Gyro: x=%.3f y=%.3f z=%.3f", gyro_x_, gyro_y_, gyro_z_);
         }
     }
     
