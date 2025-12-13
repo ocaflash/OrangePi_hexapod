@@ -148,11 +148,14 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             gait_cmd_pub_->publish(gait_command_);
         }
     } else {
-        // Leg radius adjustment when seated (L2 held)
-        if (joy->buttons[button_right_shift_2_] && !imu_flag_) {
-            body_state_.z = -0.016;  // Seated position (was -0.01 which caused IK errors)
+        // Leg radius adjustment when seated (L2 trigger pressed - use axis, not button)
+        // L2 axis: 1.0 = not pressed, -1.0 = fully pressed
+        bool l2_pressed = (joy->axes.size() > DS4_AXIS_L2) && (joy->axes[DS4_AXIS_L2] < 0.5);
+        if (l2_pressed && !imu_flag_) {
+            body_state_.z = -0.016;  // Seated position
             body_state_.leg_radius = 0.06 * joy->axes[axis_body_yaw_] + 0.11;
             move_body_pub_->publish(body_state_);
+            RCLCPP_DEBUG(this->get_logger(), "L2 pressed: leg_radius=%.3f", body_state_.leg_radius);
         }
         // Only publish STOP once when transitioning to stopped state
         if (gait_command_.cmd != crab_msgs::msg::GaitCommand::STOP) {
