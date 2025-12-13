@@ -111,7 +111,8 @@ void LegKinematics::getLegIKSolver(const std::shared_ptr<crab_msgs::srv::GetLegI
             RCLCPP_DEBUG(this->get_logger(), "IK Solution for leg%s found", suffixes[request->leg_number[i]].c_str());
         } else {
             response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_NOT_FOUND;
-            RCLCPP_ERROR(this->get_logger(), "An IK solution could not be found");
+            RCLCPP_ERROR(this->get_logger(), "IK not found for leg %zu: x=%.4f y=%.4f z=%.4f", 
+                         request->leg_number[i], leg_dest_pos.x, leg_dest_pos.y, leg_dest_pos.z);
             return;
         }
     }
