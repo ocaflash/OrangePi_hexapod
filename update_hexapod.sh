@@ -68,10 +68,28 @@ colcon build || { echo "❌ Ошибка сборки"; exit 1; }
 echo "→ Активируем окружение..."
 source $WORKSPACE/install/setup.bash
 
-# Делаем скрипт запуска исполняемым
+# Делаем скрипты исполняемыми
 chmod +x $REPO_DIR/start_hexapod.sh
+chmod +x $REPO_DIR/install_service.sh 2>/dev/null
+
+# Перезапускаем сервис если он установлен и активен
+if systemctl is-active --quiet hexapod; then
+    echo "→ Перезапускаем сервис hexapod..."
+    sudo systemctl restart hexapod
+    echo "✓ Сервис перезапущен"
+fi
 
 echo "✅ Сборка завершена! (ветка: $BRANCH)"
 echo ""
-echo "Для запуска робота:"
-echo "  $REPO_DIR/start_hexapod.sh"
+if systemctl is-enabled --quiet hexapod 2>/dev/null; then
+    echo "Сервис hexapod установлен. Управление:"
+    echo "  sudo systemctl status hexapod   - статус"
+    echo "  sudo systemctl restart hexapod  - перезапуск"
+    echo "  journalctl -u hexapod -f        - логи"
+else
+    echo "Для запуска робота:"
+    echo "  $REPO_DIR/start_hexapod.sh"
+    echo ""
+    echo "Для установки как сервис:"
+    echo "  $REPO_DIR/install_service.sh"
+fi
