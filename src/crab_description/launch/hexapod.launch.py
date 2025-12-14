@@ -4,6 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch.substitutions import Command, LaunchConfiguration
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
@@ -11,7 +12,10 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'models', 'crab_model.xacro')
     config_file = os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
     
-    robot_description = Command(['xacro ', xacro_file], on_stderr='ignore')
+    robot_description = ParameterValue(
+        Command(['xacro ', xacro_file], on_stderr='ignore'),
+        value_type=str
+    )
     
     # Загрузка конфига геометрии
     with open(config_file, 'r') as f:
