@@ -1,7 +1,9 @@
 #!/bin/bash
 # Установка hexapod как systemd сервиса
 
-SERVICE_FILE="hexapod.service"
+# Определяем директорию скрипта
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_FILE="$SCRIPT_DIR/hexapod.service"
 SERVICE_NAME="hexapod"
 
 echo "=== Установка сервиса $SERVICE_NAME ==="
