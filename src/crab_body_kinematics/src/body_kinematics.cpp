@@ -211,12 +211,10 @@ void BodyKinematics::motionTimerCallback() {
     if (stand_up_active_) {
         if (bs_.z >= -z_) {
             bs_.z -= stand_step_;
-            RCLCPP_INFO(this->get_logger(), "Stand up: z=%.4f, target=-%.4f, leg0: x=%.4f y=%.4f z=%.4f",
-                        bs_.z, z_, final_vector_[0].x(), final_vector_[0].y(), final_vector_[0].z());
             calculateKinematics(&bs_);
         } else {
             stand_up_active_ = false;
-            RCLCPP_INFO(this->get_logger(), "Stand up complete");
+            RCLCPP_INFO(this->get_logger(), "Stand up complete (z=%.4f)", bs_.z);
         }
     }
     if (seat_down_active_) {
@@ -225,6 +223,7 @@ void BodyKinematics::motionTimerCallback() {
             calculateKinematics(&bs_);
         } else {
             seat_down_active_ = false;
+            RCLCPP_INFO(this->get_logger(), "Seat down complete (z=%.4f)", bs_.z);
         }
     }
 }
