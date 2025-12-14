@@ -62,7 +62,7 @@ void GaitKinematics::gaitGenerator() {
     Gait gait;
     gait.setTrapezoid(trap_low_r_, trap_high_r_, trap_h_, trap_z_, path_tolerance_, rounded_radius_);
 
-    rclcpp::Rate rate(25);
+    rclcpp::Rate rate(50);  // Увеличено с 25 Hz для более плавного движения
     while (rclcpp::ok()) {
         // Only run gait if scale > 0 to avoid KDL path errors
         if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNRIPPLE && gait_command_.scale > 0.01) {

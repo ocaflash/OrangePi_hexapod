@@ -20,7 +20,7 @@ public:
         this->declare_parameter<double>("joint_upper_limit", 1.570796327);
         this->declare_parameter<std::string>("port_name", "/dev/ttyS5");
         this->declare_parameter<int>("baud_rate", 115200);
-        this->declare_parameter<double>("max_speed", 3.0);  // max change per update (reduced for smoother motion)
+        this->declare_parameter<double>("max_speed", 5.0);  // max change per update
 
         joint_lower_limit_ = this->get_parameter("joint_lower_limit").as_double();
         joint_upper_limit_ = this->get_parameter("joint_upper_limit").as_double();
