@@ -10,7 +10,7 @@ def generate_launch_description():
 
     robot_description = Command([
         'xacro', xacro_file,
-        'config:=', os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
+        'config:=' + os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
     ])
 
     return LaunchDescription([
