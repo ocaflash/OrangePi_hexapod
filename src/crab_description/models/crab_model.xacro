@@ -1,15 +1,18 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="crab">
 
-	<xacro:arg name="config" default="$(find-pkg-share crab_description)/config/robot_geometry.yaml" />
-	<xacro:property name="cfg" value="${xacro.load_yaml(config)}" />
+	<xacro:arg name="coxa_length" default="0.025" />
+	<xacro:arg name="femur_length" default="0.077" />
+	<xacro:arg name="tibia_length" default="0.120" />
+	<xacro:arg name="joint_lower_limit" default="-1.5" />
+	<xacro:arg name="joint_upper_limit" default="1.5" />
 
 <!-- ============================================================================ -->
 <!-- РАЗМЕРЫ ЗВЕНЬЕВ НОГИ (в метрах) -->
 <!-- ============================================================================ -->
-	<xacro:property name="coxa_length" value="${cfg['leg']['coxa_length']}" />   <!-- 25 мм: ось coxa → ось femur -->
-	<xacro:property name="femur_length" value="${cfg['leg']['femur_length']}" />  <!-- 77 мм: ось femur → ось tibia -->
-	<xacro:property name="tibia_length" value="${cfg['leg']['tibia_length']}" />  <!-- 120 мм: ось tibia → кончик -->
+	<xacro:property name="coxa_length" value="${coxa_length}" />   <!-- 25 мм: ось coxa → ось femur -->
+	<xacro:property name="femur_length" value="${femur_length}" />  <!-- 77 мм: ось femur → ось tibia -->
+	<xacro:property name="tibia_length" value="${tibia_length}" />  <!-- 120 мм: ось tibia → кончик -->
 	<!-- Суммарная длина ноги: 0.025 + 0.077 + 0.120 = 0.222 м -->
 
 <!-- ============================================================================ -->
@@ -42,8 +45,8 @@
 	</link>
 
 <!-- Joint properties -->
-	<xacro:property name="joint_lower_limit" value="${cfg['joint_limits']['lower']}" />
-	<xacro:property name="joint_upper_limit" value="${cfg['joint_limits']['upper']}" />
+	<xacro:property name="joint_lower_limit" value="${joint_lower_limit}" />
+	<xacro:property name="joint_upper_limit" value="${joint_upper_limit}" />
 	<xacro:property name="joint_effort" value="10000" />
 	<xacro:property name="joint_velocity" value="100" />
 

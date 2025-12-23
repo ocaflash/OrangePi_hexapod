@@ -12,14 +12,22 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'models', 'crab_model.xacro')
     config_file = os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
     
-    robot_description = ParameterValue(
-        Command(['xacro', xacro_file, 'config:=' + config_file], on_stderr='ignore'),
-        value_type=str
-    )
-    
     # Загрузка конфига геометрии
     with open(config_file, 'r') as f:
         geometry_config = yaml.safe_load(f)
+
+    xacro_args = [
+        'coxa_length:=' + str(geometry_config['leg']['coxa_length']),
+        'femur_length:=' + str(geometry_config['leg']['femur_length']),
+        'tibia_length:=' + str(geometry_config['leg']['tibia_length']),
+        'joint_lower_limit:=' + str(geometry_config['joint_limits']['lower']),
+        'joint_upper_limit:=' + str(geometry_config['joint_limits']['upper']),
+    ]
+
+    robot_description = ParameterValue(
+        Command(['xacro', xacro_file, *xacro_args], on_stderr='ignore'),
+        value_type=str
+    )
     
     # Аргумент для порта Maestro
     port_name_arg = DeclareLaunchArgument(
