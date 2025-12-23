@@ -11,6 +11,8 @@ Visualization Manager:
     - Class: rviz_default_plugins/RobotModel
       Name: RobotModel
       Enabled: true
+      Description Source: Parameter
+      Description Parameter: robot_description
       Description Topic:
         Value: /robot_description
     - Class: rviz_default_plugins/TF
