@@ -3,6 +3,7 @@
 
 # Определяем директорию скрипта
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/scripts.env"
 SERVICE_FILE="$SCRIPT_DIR/hexapod.service"
 SERVICE_NAME="hexapod"
 

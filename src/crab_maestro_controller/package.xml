@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>crab_maestro_controller</name>
+  <version>0.0.1</version>
+  <description>Maestro servo controller nodes for crab hexapod robot (ROS 2)</description>
+
+  <maintainer email="tuuzdu@todo.todo">tuuzdu</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>crab_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

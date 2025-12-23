@@ -28,10 +28,12 @@ echo "=== Сборка ROS2 Jazzy Base ==="
 colcon build --symlink-install
 
 echo "=== Настройка окружения ==="
-echo "source ~/ros2_jazzy/install/setup.bash" >> ~/.bashrc
+ROS2_SETUP_LINE="source ~/ros2_jazzy/install/setup.bash"
+if ! grep -Fxq "$ROS2_SETUP_LINE" ~/.bashrc; then
+    echo "$ROS2_SETUP_LINE" >> ~/.bashrc
+fi
 source ~/.bashrc
 
 echo "=== Установка завершена! ==="
 echo "Теперь можно запускать ROS2 узлы, например:"
 echo "  ros2 run demo_nodes_cpp talker"
-

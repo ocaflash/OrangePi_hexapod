@@ -14,7 +14,7 @@ Environment="RMW_FASTRTPS_USE_SHM=0"
 Environment="ROS_DOMAIN_ID=0"
 
 # Запуск через bash для корректной загрузки ROS2
-ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && source /home/orangepi/ros2_ws/install/setup.bash && ros2 launch crab_description hexapod.launch.py'
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && source /home/orangepi/ros2_ws/src/OrangePi_hexapod/scripts.env && source "$WORKSPACE/install/setup.bash" && ros2 launch crab_description hexapod.launch.py'
 
 # Перезапуск при падении
 Restart=on-failure

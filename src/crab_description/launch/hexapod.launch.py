@@ -21,15 +21,21 @@ def generate_launch_description():
     with open(config_file, 'r') as f:
         geometry_config = yaml.safe_load(f)
     
-    # Аргумент для порта Maestro
+    # Аргументы для Maestro
     port_name_arg = DeclareLaunchArgument(
         'port_name',
         default_value='/dev/ttyS5',
         description='Serial port for Maestro servo controller'
     )
+    maestro_baud_arg = DeclareLaunchArgument(
+        'maestro_baud',
+        default_value='115200',
+        description='Baud rate for Maestro controller'
+    )
 
     return LaunchDescription([
         port_name_arg,
+        maestro_baud_arg,
         
         # Robot State Publisher (публикует URDF)
         Node(
@@ -108,6 +114,15 @@ def generate_launch_description():
             parameters=[{
                 'port_name': LaunchConfiguration('port_name'),
                 'baud_rate': 115200
+            }],
+        ),
+
+        Node(
+            package='crab_maestro_controller',
+            executable='controller_sub',
+            parameters=[{
+                'port_name': LaunchConfiguration('port_name'),
+                'baud_rate': LaunchConfiguration('maestro_baud')
             }],
         ),
         

@@ -2,8 +2,8 @@
 # Скрипт автоматического обновления и сборки OrangePi_hexapod
 
 # Настройки
-WORKSPACE=~/ros2_ws
-REPO_DIR=$WORKSPACE/src/OrangePi_hexapod
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/scripts.env"
 DEFAULT_BRANCH="main"
 
 echo "=== [$(date)] Автообновление OrangePi_hexapod ==="
@@ -71,6 +71,7 @@ source $WORKSPACE/install/setup.bash
 # Делаем скрипты исполняемыми
 chmod +x $REPO_DIR/start_hexapod.sh
 chmod +x $REPO_DIR/install_service.sh 2>/dev/null
+chmod +x $REPO_DIR/setup.sh 2>/dev/null
 
 # Перезапускаем сервис если он установлен и активен
 if systemctl is-active --quiet hexapod; then

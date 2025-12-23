@@ -1,7 +1,8 @@
 #!/bin/bash
 # Скрипт запуска гексапода
 
-WORKSPACE=~/ros2_ws
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/scripts.env"
 
 echo "=== Запуск Crab Hexapod ==="
 
@@ -20,7 +21,7 @@ sleep 1
 
 # Подключаем окружение
 source /opt/ros/jazzy/setup.bash
-source $WORKSPACE/install/setup.bash
+source "$WORKSPACE/install/setup.bash"
 
 # Отключаем SHM для FastDDS (избегаем ошибок)
 export RMW_FASTRTPS_USE_SHM=0
