@@ -17,18 +17,18 @@ def generate_launch_description():
         geometry_config = yaml.safe_load(f)
 
     xacro_args = [
-        'coxa_length:=' + str(geometry_config['leg']['coxa_length']),
-        'femur_length:=' + str(geometry_config['leg']['femur_length']),
-        'tibia_length:=' + str(geometry_config['leg']['tibia_length']),
-        'joint_lower_limit:=' + str(geometry_config['joint_limits']['lower']),
-        'joint_upper_limit:=' + str(geometry_config['joint_limits']['upper']),
+        ' coxa_length:=' + str(geometry_config['leg']['coxa_length']),
+        ' femur_length:=' + str(geometry_config['leg']['femur_length']),
+        ' tibia_length:=' + str(geometry_config['leg']['tibia_length']),
+        ' joint_lower_limit:=' + str(geometry_config['joint_limits']['lower']),
+        ' joint_upper_limit:=' + str(geometry_config['joint_limits']['upper']),
         PythonExpression([
-            "'use_primitives:=' + '", LaunchConfiguration('use_primitives'), "'"
+            "' use_primitives:=' + '", LaunchConfiguration('use_primitives'), "'"
         ]),
     ]
 
     robot_description = ParameterValue(
-        Command(['xacro', xacro_file, *xacro_args], on_stderr='ignore'),
+        Command(['xacro ', xacro_file, *xacro_args], on_stderr='ignore'),
         value_type=str
     )
     
