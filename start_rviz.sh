@@ -28,4 +28,4 @@ fi
 
 source "$SETUP_FOUND"
 
-ros2 launch crab_description display_model.launch.py
+ros2 launch crab_description display_model.launch.py use_primitives:="$USE_PRIMITIVES"

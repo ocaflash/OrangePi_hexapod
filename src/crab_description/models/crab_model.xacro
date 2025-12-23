@@ -6,6 +6,7 @@
 	<xacro:arg name="tibia_length" default="0.120" />
 	<xacro:arg name="joint_lower_limit" default="-1.5" />
 	<xacro:arg name="joint_upper_limit" default="1.5" />
+	<xacro:arg name="use_primitives" default="false" />
 
 <!-- ============================================================================ -->
 <!-- РАЗМЕРЫ ЗВЕНЬЕВ НОГИ (в метрах) -->
@@ -36,7 +37,12 @@
     		<visual>
       			<origin	xyz="0 0 0" rpy="0 0 0" />
       			<geometry>
-				<mesh filename="package://crab_description/meshes/thorax.STL" />
+				<xacro:if value="${use_primitives}">
+					<box size="0.18 0.12 0.04" />
+				</xacro:if>
+				<xacro:unless value="${use_primitives}">
+					<mesh filename="package://crab_description/meshes/thorax.STL" />
+				</xacro:unless>
       			</geometry>
      			<material name="grey">
         			<color rgba="0.5 0.5 0.5 1" />
@@ -74,7 +80,12 @@
     		<visual>
       			<origin xyz="0 0 0" rpy="0 0 0" />
       			<geometry>
-        			<mesh filename="package://crab_description/meshes/coxa_${side}.STL" />
+					<xacro:if value="${use_primitives}">
+						<box size="${coxa_length} 0.02 0.02" />
+					</xacro:if>
+					<xacro:unless value="${use_primitives}">
+        				<mesh filename="package://crab_description/meshes/coxa_${side}.STL" />
+					</xacro:unless>
       			</geometry>
       			<material name="">
         			<color rgba="0.7 0.7 0 1" />
@@ -94,7 +105,12 @@
     		<visual>
       			<origin xyz="0 0 0" rpy="0 0 0" />
       			<geometry>
-        			<mesh filename="package://crab_description/meshes/femur_${side}.STL" />
+					<xacro:if value="${use_primitives}">
+						<box size="${femur_length} 0.02 0.02" />
+					</xacro:if>
+					<xacro:unless value="${use_primitives}">
+        				<mesh filename="package://crab_description/meshes/femur_${side}.STL" />
+					</xacro:unless>
       			</geometry>
       			<material name="">
         			<color rgba="0 0.7 0.7 1" />
@@ -114,7 +130,12 @@
     		<visual>
       			<origin xyz="0 0 0" rpy="0 0 0.06" />
       			<geometry>
-       				<mesh filename="package://crab_description/meshes/tibia_${side}.STL" />
+					<xacro:if value="${use_primitives}">
+						<box size="${tibia_length} 0.02 0.02" />
+					</xacro:if>
+					<xacro:unless value="${use_primitives}">
+       					<mesh filename="package://crab_description/meshes/tibia_${side}.STL" />
+					</xacro:unless>
       			</geometry>
       			<material name="">
         			<color rgba="0.7 0 0.7 1" />

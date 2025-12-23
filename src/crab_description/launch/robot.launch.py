@@ -1,8 +1,9 @@
 import os
 import yaml
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
@@ -13,12 +14,19 @@ def generate_launch_description():
     with open(config_file, 'r') as f:
         geometry_config = yaml.safe_load(f)
 
+    use_primitives_arg = DeclareLaunchArgument(
+        'use_primitives',
+        default_value='false',
+        description='Use primitive geometry instead of STL meshes'
+    )
+
     xacro_args = [
         'coxa_length:=' + str(geometry_config['leg']['coxa_length']),
         'femur_length:=' + str(geometry_config['leg']['femur_length']),
         'tibia_length:=' + str(geometry_config['leg']['tibia_length']),
         'joint_lower_limit:=' + str(geometry_config['joint_limits']['lower']),
         'joint_upper_limit:=' + str(geometry_config['joint_limits']['upper']),
+        'use_primitives:=' + LaunchConfiguration('use_primitives'),
     ]
 
     robot_description = Command([
@@ -27,6 +35,7 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        use_primitives_arg,
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',

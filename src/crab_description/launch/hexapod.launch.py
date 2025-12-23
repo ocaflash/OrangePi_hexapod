@@ -22,6 +22,7 @@ def generate_launch_description():
         'tibia_length:=' + str(geometry_config['leg']['tibia_length']),
         'joint_lower_limit:=' + str(geometry_config['joint_limits']['lower']),
         'joint_upper_limit:=' + str(geometry_config['joint_limits']['upper']),
+        'use_primitives:=' + LaunchConfiguration('use_primitives'),
     ]
 
     robot_description = ParameterValue(
@@ -29,15 +30,21 @@ def generate_launch_description():
         value_type=str
     )
     
-    # Аргумент для порта Maestro
+    # Аргументы
     port_name_arg = DeclareLaunchArgument(
         'port_name',
         default_value='/dev/ttyS5',
         description='Serial port for Maestro servo controller'
     )
+    use_primitives_arg = DeclareLaunchArgument(
+        'use_primitives',
+        default_value='false',
+        description='Use primitive geometry instead of STL meshes'
+    )
 
     return LaunchDescription([
         port_name_arg,
+        use_primitives_arg,
         
         # Robot State Publisher (публикует URDF)
         Node(
