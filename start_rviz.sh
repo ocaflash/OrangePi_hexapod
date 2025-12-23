@@ -28,4 +28,7 @@ fi
 
 source "$SETUP_FOUND"
 
+colcon build --packages-select crab_description
+source install/setup.bash
+
 ros2 launch crab_description display_model.launch.py use_primitives:="$USE_PRIMITIVES"
