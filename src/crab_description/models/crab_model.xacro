@@ -51,8 +51,8 @@
 	</link>
 
 <!-- Joint properties -->
-	<xacro:property name="joint_lower_limit" value="${joint_lower_limit}" />
-	<xacro:property name="joint_upper_limit" value="${joint_upper_limit}" />
+	<xacro:property name="joint_lower_limit_val" value="${xacro.arg('joint_lower_limit')}" />
+	<xacro:property name="joint_upper_limit_val" value="${xacro.arg('joint_upper_limit')}" />
 	<xacro:property name="joint_effort" value="10000" />
 	<xacro:property name="joint_velocity" value="100" />
 
@@ -73,7 +73,7 @@
     		<parent link="leg_center_${side}${num}" />
     		<child link="coxa_${side}${num}" />
     		<axis xyz="0 0 -1" />
-    		<limit lower="${joint_lower_limit}" upper="${joint_upper_limit}" effort="${joint_effort}" velocity="${joint_velocity}" />
+    		<limit lower="${joint_lower_limit_val}" upper="${joint_upper_limit_val}" effort="${joint_effort}" velocity="${joint_velocity}" />
   	</joint>
 
   	<link name="coxa_${side}${num}">
@@ -98,7 +98,7 @@
     		<parent link="coxa_${side}${num}" />
     		<child link="femur_${side}${num}" />
     		<axis xyz="0 0 -1" />
-    		<limit lower="${joint_lower_limit}" upper="${joint_upper_limit}" effort="${joint_effort}" velocity="${joint_velocity}" />
+    		<limit lower="${joint_lower_limit_val}" upper="${joint_upper_limit_val}" effort="${joint_effort}" velocity="${joint_velocity}" />
   	</joint>
 
   	<link name="femur_${side}${num}">
@@ -123,7 +123,7 @@
     		<parent link="femur_${side}${num}" />
     		<child link="tibia_${side}${num}" />
     		<axis xyz="0 0 1" />
-    		<limit lower="${joint_lower_limit}" upper="${joint_upper_limit}" effort="${joint_effort}" velocity="${joint_velocity}" />
+    		<limit lower="${joint_lower_limit_val}" upper="${joint_upper_limit_val}" effort="${joint_effort}" velocity="${joint_velocity}" />
   	</joint>
 
   	<link name="tibia_${side}${num}">
