@@ -13,7 +13,7 @@ def generate_launch_description():
     config_file = os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
     
     robot_description = ParameterValue(
-        Command(['xacro ', xacro_file], on_stderr='ignore'),
+        Command(['xacro', xacro_file], on_stderr='ignore'),
         value_type=str
     )
     
