@@ -27,7 +27,9 @@ def generate_launch_description():
         'tibia_length:=' + str(geometry_config['leg']['tibia_length']),
         'joint_lower_limit:=' + str(geometry_config['joint_limits']['lower']),
         'joint_upper_limit:=' + str(geometry_config['joint_limits']['upper']),
-        PythonExpression(["'use_primitives:=' + ", LaunchConfiguration('use_primitives')]),
+        PythonExpression([
+            "'use_primitives:=' + '", LaunchConfiguration('use_primitives'), "'"
+        ]),
     ]
 
     robot_description = Command([
