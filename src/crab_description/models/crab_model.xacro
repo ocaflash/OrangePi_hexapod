@@ -37,10 +37,10 @@
     		<visual>
       			<origin	xyz="0 0 0" rpy="0 0 0" />
       			<geometry>
-				<xacro:if value="${use_primitives == 'true'}">
+				<xacro:if value="${xacro.arg('use_primitives') == 'true'}">
 					<box size="0.18 0.12 0.04" />
 				</xacro:if>
-				<xacro:unless value="${use_primitives == 'true'}">
+				<xacro:unless value="${xacro.arg('use_primitives') == 'true'}">
 					<mesh filename="package://crab_description/meshes/thorax.STL" />
 				</xacro:unless>
       			</geometry>
@@ -80,10 +80,10 @@
     		<visual>
       			<origin xyz="0 0 0" rpy="0 0 0" />
       			<geometry>
-					<xacro:if value="${use_primitives == 'true'}">
+					<xacro:if value="${xacro.arg('use_primitives') == 'true'}">
 						<box size="${coxa_length} 0.02 0.02" />
 					</xacro:if>
-					<xacro:unless value="${use_primitives == 'true'}">
+					<xacro:unless value="${xacro.arg('use_primitives') == 'true'}">
         				<mesh filename="package://crab_description/meshes/coxa_${side}.STL" />
 					</xacro:unless>
       			</geometry>
@@ -105,10 +105,10 @@
     		<visual>
       			<origin xyz="0 0 0" rpy="0 0 0" />
       			<geometry>
-					<xacro:if value="${use_primitives == 'true'}">
+					<xacro:if value="${xacro.arg('use_primitives') == 'true'}">
 						<box size="${femur_length} 0.02 0.02" />
 					</xacro:if>
-					<xacro:unless value="${use_primitives == 'true'}">
+					<xacro:unless value="${xacro.arg('use_primitives') == 'true'}">
         				<mesh filename="package://crab_description/meshes/femur_${side}.STL" />
 					</xacro:unless>
       			</geometry>
@@ -130,10 +130,10 @@
     		<visual>
       			<origin xyz="0 0 0" rpy="0 0 0.06" />
       			<geometry>
-					<xacro:if value="${use_primitives == 'true'}">
+					<xacro:if value="${xacro.arg('use_primitives') == 'true'}">
 						<box size="${tibia_length} 0.02 0.02" />
 					</xacro:if>
-					<xacro:unless value="${use_primitives == 'true'}">
+					<xacro:unless value="${xacro.arg('use_primitives') == 'true'}">
        					<mesh filename="package://crab_description/meshes/tibia_${side}.STL" />
 					</xacro:unless>
       			</geometry>
