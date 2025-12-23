@@ -9,7 +9,10 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'models', 'crab_model.xacro')
     rviz_config = os.path.join(pkg_share, 'rviz', 'urdf.rviz')
 
-    robot_description = Command(['xacro', xacro_file])
+    robot_description = Command([
+        'xacro', xacro_file,
+        'config:=', os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
+    ])
 
     return LaunchDescription([
         Node(
