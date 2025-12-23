@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="crab">
 
-	<xacro:arg name="config" default="$(find crab_description)/config/robot_geometry.yaml" />
+	<xacro:arg name="config" default="$(find-pkg-share crab_description)/config/robot_geometry.yaml" />
 	<xacro:property name="cfg" value="${xacro.load_yaml(config)}" />
 
 <!-- ============================================================================ -->
