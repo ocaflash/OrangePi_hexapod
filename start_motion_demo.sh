@@ -6,6 +6,9 @@ source "$SCRIPT_DIR/scripts.env"
 
 source /opt/ros/jazzy/setup.bash
 
+# Отключаем SHM для FastDDS (избегаем ошибок в некоторых окружениях)
+export RMW_FASTRTPS_USE_SHM=0
+
 SETUP_CANDIDATES=(
   "$WORKSPACE/install/setup.bash"
   "$REPO_DIR/install/setup.bash"
