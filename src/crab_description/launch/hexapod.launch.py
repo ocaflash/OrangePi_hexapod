@@ -38,6 +38,11 @@ def generate_launch_description():
         default_value='/dev/ttyS5',
         description='Serial port for Maestro servo controller'
     )
+    imu_autostart_arg = DeclareLaunchArgument(
+        'imu_autostart',
+        default_value='false',
+        description='Automatically enable IMU stabilization at startup'
+    )
     use_primitives_arg = DeclareLaunchArgument(
         'use_primitives',
         default_value='false',
@@ -47,6 +52,7 @@ def generate_launch_description():
     return LaunchDescription([
         port_name_arg,
         use_primitives_arg,
+        imu_autostart_arg,
         
         # Robot State Publisher (публикует URDF)
         Node(
@@ -104,6 +110,7 @@ def generate_launch_description():
         Node(
             package='crab_imu',
             executable='imu_control',
+            parameters=[{'auto_start': LaunchConfiguration('imu_autostart')}],
         ),
         
         # Joystick Teleop

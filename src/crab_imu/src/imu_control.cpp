@@ -68,6 +68,8 @@ class ImuControlNode : public rclcpp::Node
 public:
   ImuControlNode() : Node("imu_control"), imu_on_(false)
   {
+    this->declare_parameter<bool>("auto_start", false);
+
     body_state_.z = -0.08;
     body_state_.leg_radius = 0.11;
 
@@ -84,9 +86,47 @@ public:
 
     timer_val = this->now();
     timer_old = this->now();
+
+    if (this->get_parameter("auto_start").as_bool()) {
+      startImuControl();
+    }
   }
 
 private:
+  void startImuControl()
+  {
+    if (imu_on_) {
+      return;
+    }
+    setup_IMU();
+    rclcpp::Rate r(25);
+    while (body_state_.z >= -0.08) {
+      body_state_.z -= 0.0025;
+      r.sleep();
+      move_body_pub_->publish(body_state_);
+    }
+    imu_on_ = true;
+  }
+
+  void stopImuControl()
+  {
+    if (!imu_on_) {
+      return;
+    }
+    rclcpp::Rate r(25);
+    body_state_.roll = 0;
+    body_state_.pitch = 0;
+    body_state_.yaw = 0;
+    body_state_.x = 0;
+    body_state_.y = 0;
+    while (body_state_.z <= -0.016) {
+      body_state_.z += 0.0025;
+      r.sleep();
+      move_body_pub_->publish(body_state_);
+    }
+    imu_on_ = false;
+  }
+
   void setup_IMU()
   {
     RCLCPP_INFO(this->get_logger(), "Start initialization IMU");
@@ -114,28 +154,10 @@ private:
   void teleopBodyCmd(const crab_msgs::msg::BodyCommand::SharedPtr body_cmd)
   {
     if (body_cmd->cmd == crab_msgs::msg::BodyCommand::IMU_START_CMD) {
-      setup_IMU();
-      rclcpp::Rate r(25);
-      while (body_state_.z >= -0.08) {
-        body_state_.z -= 0.0025;
-        r.sleep();
-        move_body_pub_->publish(body_state_);
-      }
-      imu_on_ = true;
+      startImuControl();
     }
     if (body_cmd->cmd == crab_msgs::msg::BodyCommand::IMU_STOP_CMD) {
-      rclcpp::Rate r(25);
-      body_state_.roll = 0;
-      body_state_.pitch = 0;
-      body_state_.yaw = 0;
-      body_state_.x = 0;
-      body_state_.y = 0;
-      while (body_state_.z <= -0.016) {
-        body_state_.z += 0.0025;
-        r.sleep();
-        move_body_pub_->publish(body_state_);
-      }
-      imu_on_ = false;
+      stopImuControl();
     }
   }
 
