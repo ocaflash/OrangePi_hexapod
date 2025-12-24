@@ -1,6 +1,8 @@
 #include "leg_ik_service.hpp"
 
-const static std::string suffixes[6] = {"_r1", "_r2", "_r3", "_l1", "_l2", "_l3"};
+namespace {
+constexpr std::array<const char*, NUM_LEGS> kSuffixes = {"_r1", "_r2", "_r3", "_l1", "_l2", "_l3"};
+}  // namespace
 
 LegKinematics::LegKinematics() : Node("leg_ik_service") {
     this->declare_parameter<std::string>("robot_description", "");
@@ -42,11 +44,11 @@ bool LegKinematics::init() {
     double epsilon = this->get_parameter("epsilon").as_double();
 
     for (unsigned int i = 0; i < num_legs_; i++) {
-        fk_solver_[i] = new KDL::ChainFkSolverPos_recursive(*chains_ptr_[i]);
-        ik_solver_vel_[i] = new KDL::ChainIkSolverVel_pinv(*chains_ptr_[i]);
-        ik_solver_pos_[i] = new KDL::HP_ChainIkSolverPos_NR_JL(*chains_ptr_[i], joint_min_, joint_max_,
-                                                                *fk_solver_[i], *ik_solver_vel_[i],
-                                                                maxIterations, epsilon);
+        fk_solver_[i] = std::make_unique<KDL::ChainFkSolverPos_recursive>(*chains_[i]);
+        ik_solver_vel_[i] = std::make_unique<KDL::ChainIkSolverVel_pinv>(*chains_[i]);
+        ik_solver_pos_[i] = std::make_unique<KDL::HP_ChainIkSolverPos_NR_JL>(
+            *chains_[i], joint_min_, joint_max_, *fk_solver_[i], *ik_solver_vel_[i], maxIterations,
+            epsilon);
     }
 
     RCLCPP_INFO(this->get_logger(), "Advertising service");
@@ -68,13 +70,13 @@ bool LegKinematics::loadModel(const std::string& xml) {
     }
     RCLCPP_INFO(this->get_logger(), "Construct tree");
 
-    for (int i = 0; i < num_legs_; i++) {
-        tip_name_result = tip_name_ + suffixes[i];
+    for (unsigned int i = 0; i < num_legs_; i++) {
+        tip_name_result = tip_name_ + kSuffixes[i];
         if (!tree.getChain(root_name_, tip_name_result, chain)) {
-            RCLCPP_ERROR(this->get_logger(), "Could not initialize chain_%s object", suffixes[i].c_str());
+            RCLCPP_ERROR(this->get_logger(), "Could not initialize chain_%s object", kSuffixes[i]);
             return false;
         }
-        chains_ptr_[i] = new KDL::Chain(chain);
+        chains_[i] = std::make_unique<KDL::Chain>(chain);
     }
     RCLCPP_INFO(this->get_logger(), "Construct chains");
 
@@ -108,7 +110,7 @@ void LegKinematics::getLegIKSolver(const std::shared_ptr<crab_msgs::srv::GetLegI
             }
             response->target_joints.push_back(jnt_buf);
             response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND;
-            RCLCPP_DEBUG(this->get_logger(), "IK Solution for leg%s found", suffixes[request->leg_number[i]].c_str());
+            RCLCPP_DEBUG(this->get_logger(), "IK Solution for leg%s found", kSuffixes[request->leg_number[i]]);
         } else {
             response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_NOT_FOUND;
             RCLCPP_ERROR(this->get_logger(), "IK not found for leg %zu: x=%.4f y=%.4f z=%.4f", 

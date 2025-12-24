@@ -1,6 +1,8 @@
 #ifndef LEG_IK_SERVICE_HPP_
 #define LEG_IK_SERVICE_HPP_
 
+#include <array>
+#include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <kdl_parser/kdl_parser.hpp>
 #include "chainiksolvervel_pinv.hpp"
@@ -24,11 +26,11 @@ private:
     static constexpr unsigned int num_joints_ = NUM_JOINTS;
     static constexpr unsigned int num_legs_ = NUM_LEGS;
 
-    KDL::Chain* chains_ptr_[6];
+    std::array<std::unique_ptr<KDL::Chain>, NUM_LEGS> chains_;
     KDL::JntArray joint_min_, joint_max_;
-    KDL::ChainFkSolverPos_recursive* fk_solver_[6];
-    KDL::HP_ChainIkSolverPos_NR_JL* ik_solver_pos_[6];
-    KDL::ChainIkSolverVel_pinv* ik_solver_vel_[6];
+    std::array<std::unique_ptr<KDL::ChainFkSolverPos_recursive>, NUM_LEGS> fk_solver_;
+    std::array<std::unique_ptr<KDL::HP_ChainIkSolverPos_NR_JL>, NUM_LEGS> ik_solver_pos_;
+    std::array<std::unique_ptr<KDL::ChainIkSolverVel_pinv>, NUM_LEGS> ik_solver_vel_;
 
     rclcpp::Service<crab_msgs::srv::GetLegIKSolver>::SharedPtr ik_service_;
 
