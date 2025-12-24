@@ -51,9 +51,25 @@ NEW_COMMIT=$(git rev-parse HEAD)
 if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
     echo ""
     echo "📊 Статистика обновления:"
-    git diff --stat $OLD_COMMIT $NEW_COMMIT
+    # Основные изменения (без служебных скриптов)
+    MAIN_STATS=$(git diff --stat "$OLD_COMMIT" "$NEW_COMMIT" -- . \
+        ':(exclude)update_hexapod.sh' \
+        ':(exclude)scripts.env' || true)
+    if [ -n "$MAIN_STATS" ]; then
+        echo "$MAIN_STATS"
+    else
+        echo "(нет изменений кроме служебных скриптов)"
+    fi
+
+    # Отдельно показываем изменения служебных скриптов, если они есть
+    SCRIPT_STATS=$(git diff --stat "$OLD_COMMIT" "$NEW_COMMIT" -- update_hexapod.sh scripts.env 2>/dev/null || true)
+    if [ -n "$SCRIPT_STATS" ]; then
+        echo ""
+        echo "🧰 Изменения служебных скриптов:"
+        echo "$SCRIPT_STATS"
+    fi
     echo ""
-    COMMITS_COUNT=$(git rev-list --count $OLD_COMMIT..$NEW_COMMIT)
+    COMMITS_COUNT=$(git rev-list --count "$OLD_COMMIT..$NEW_COMMIT")
     echo "✓ Получено коммитов: $COMMITS_COUNT"
 else
     echo "✓ Уже актуальная версия"
@@ -118,9 +134,9 @@ echo "→ Активируем окружение..."
 source "$WORKSPACE/install/setup.bash"
 
 # Делаем скрипты исполняемыми
-chmod +x $REPO_DIR/start_hexapod.sh
-chmod +x $REPO_DIR/install_service.sh 2>/dev/null
-chmod +x $REPO_DIR/setup.sh 2>/dev/null
+chmod +x "$REPO_DIR/start_hexapod.sh"
+chmod +x "$REPO_DIR/install_service.sh" 2>/dev/null
+chmod +x "$REPO_DIR/setup.sh" 2>/dev/null
 
 # Перезапускаем сервис если он установлен и активен
 if systemctl is-active --quiet hexapod; then
