@@ -1,6 +1,8 @@
 #!/bin/bash
 # Скрипт автоматического обновления и сборки OrangePi_hexapod
 
+set -euo pipefail
+
 # Настройки
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/scripts.env"
@@ -9,7 +11,7 @@ DEFAULT_BRANCH="main"
 echo "=== [$(date)] Автообновление OrangePi_hexapod ==="
 
 # Переходим в каталог проекта
-cd $REPO_DIR || { echo "❌ Не найден каталог $REPO_DIR"; exit 1; }
+cd "$REPO_DIR" || { echo "❌ Не найден каталог $REPO_DIR"; exit 1; }
 
 # Получаем список веток
 echo "→ Получаем список веток..."
@@ -35,14 +37,14 @@ fi
 
 # Переключаемся на ветку и обновляем
 echo "→ Переключаемся на ветку '$BRANCH'..."
-git checkout $BRANCH || { echo "❌ Ошибка переключения на ветку"; exit 1; }
+git checkout "$BRANCH" || { echo "❌ Ошибка переключения на ветку"; exit 1; }
 
 # Сохраняем текущий коммит для сравнения
 OLD_COMMIT=$(git rev-parse HEAD)
 
 echo "→ Синхронизируем с удалённой веткой..."
-git fetch origin $BRANCH
-git reset --hard origin/$BRANCH || { echo "❌ Ошибка синхронизации"; exit 1; }
+git fetch origin "$BRANCH"
+git reset --hard "origin/$BRANCH" || { echo "❌ Ошибка синхронизации"; exit 1; }
 
 # Показываем статистику изменений
 NEW_COMMIT=$(git rev-parse HEAD)
@@ -58,15 +60,62 @@ else
 fi
 
 # Переходим в workspace
-cd $WORKSPACE
+cd "$WORKSPACE"
 
 # Сборка пакетов
 echo "→ Запускаем colcon build..."
-colcon build || { echo "❌ Ошибка сборки"; exit 1; }
+if ! command -v colcon >/dev/null 2>&1; then
+    echo "❌ colcon не найден. Установите colcon (обычно пакет 'python3-colcon-common-extensions')."
+    exit 1
+fi
+
+# Heuristic: на слабых платах сборка часто 'зависает' из-за swap thrash.
+# Ограничиваем параллелизм и включаем прямой вывод, чтобы было видно реальный прогресс компиляции.
+CPU_CORES=1
+if command -v nproc >/dev/null 2>&1; then
+    CPU_CORES=$(nproc)
+fi
+
+MEM_GB=1
+if [ -r /proc/meminfo ]; then
+    MEM_KB=$(awk '/MemTotal:/ {print $2}' /proc/meminfo)
+    MEM_GB=$(( (MEM_KB + 1048575) / 1048576 ))
+fi
+
+# Можно переопределить вручную: COLCON_WORKERS=1 ./update_hexapod.sh
+COLCON_WORKERS="${COLCON_WORKERS:-}"
+if [ -z "$COLCON_WORKERS" ]; then
+    # ~1 worker на ~1.5GB RAM, но не больше числа ядер
+    if [ "$MEM_GB" -ge 6 ]; then
+        COLCON_WORKERS=4
+    elif [ "$MEM_GB" -ge 4 ]; then
+        COLCON_WORKERS=3
+    elif [ "$MEM_GB" -ge 3 ]; then
+        COLCON_WORKERS=2
+    else
+        COLCON_WORKERS=1
+    fi
+    if [ "$COLCON_WORKERS" -gt "$CPU_CORES" ]; then
+        COLCON_WORKERS="$CPU_CORES"
+    fi
+fi
+
+export CMAKE_BUILD_PARALLEL_LEVEL="$COLCON_WORKERS"
+export MAKEFLAGS="-j$COLCON_WORKERS"
+
+echo "→ Параллелизм сборки: workers=$COLCON_WORKERS (cpu=$CPU_CORES, mem≈${MEM_GB}GB)"
+echo "→ Логи colcon: $WORKSPACE/log/latest_build (и соседние директории)"
+
+colcon build \
+  --symlink-install \
+  --parallel-workers "$COLCON_WORKERS" \
+  --event-handlers console_direct+ \
+  --cmake-args -DBUILD_TESTING=OFF \
+  || { echo "❌ Ошибка сборки"; exit 1; }
 
 # Подключаем окружение
 echo "→ Активируем окружение..."
-source $WORKSPACE/install/setup.bash
+source "$WORKSPACE/install/setup.bash"
 
 # Делаем скрипты исполняемыми
 chmod +x $REPO_DIR/start_hexapod.sh
