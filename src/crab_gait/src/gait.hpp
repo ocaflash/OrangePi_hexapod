@@ -9,6 +9,7 @@
 #include <kdl/velocityprofile_spline.hpp>
 #include <kdl/path_roundedcomposite.hpp>
 #include <queue>
+#include <memory>
 
 #define NUM_LEGS 6
 #define NUM_JOINTS 3
@@ -24,13 +25,13 @@ public:
     void Stop();
 
     KDL::Frame a, b, c, d;
-    KDL::Trajectory_Segment *trajectory_transfer, *trajectory_support;
 
 private:
     static constexpr unsigned int num_joints_ = NUM_JOINTS;
     static constexpr unsigned int num_legs_ = NUM_LEGS;
 
-    void getTipVector(KDL::Trajectory_Segment *trajectory, double phase_offset, std::vector<KDL::Frame>::const_iterator vector_iter, double scale);
+    void getTipVector(const KDL::Trajectory_Segment* trajectory, double phase_offset,
+                      std::vector<KDL::Frame>::const_iterator vector_iter, double scale);
     void setFi(double fi);
     void setAlpha(double alpha);
     void setPath();
@@ -44,9 +45,12 @@ private:
     double path_tolerance_, rounded_radius_;
     KDL::Vector final_vector_[NUM_LEGS];
     KDL::RotationalInterpolation_SingleAxis rot_;
-    KDL::Path_Line *path_support_;
-    KDL::Path_RoundedComposite *path_transfer_;
+    std::unique_ptr<KDL::Path_Line> path_support_;
+    std::unique_ptr<KDL::Path_RoundedComposite> path_transfer_;
     KDL::VelocityProfile_Spline prof_support_, prof_transfer_;
+    // NOTE: Trajectories reference paths, so they must be destroyed before the paths.
+    std::unique_ptr<KDL::Trajectory_Segment> trajectory_transfer_;
+    std::unique_ptr<KDL::Trajectory_Segment> trajectory_support_;
 };
 
 #endif /* GAIT_HPP_ */
