@@ -37,7 +37,7 @@ public:
 
         std::string port_name = this->get_parameter("port_name").as_string();
         int baud_rate = this->get_parameter("baud_rate").as_int();
-        maestro_.reset(Polstro::SerialInterface::createSerialInterface(port_name, baud_rate));
+        maestro_ = Polstro::SerialInterface::createSerialInterfaceUnique(port_name, baud_rate);
 
         if (maestro_ && maestro_->isOpen()) {
             RCLCPP_INFO(this->get_logger(), "Maestro servo controller connected on %s", port_name.c_str());

@@ -1,4 +1,5 @@
 #include <cassert>
+#include <memory>
 #include "PolstroSerialInterface.h"
 #include "PolstroSerialInterfacePOSIX.h"
 
@@ -78,6 +79,11 @@ bool SerialInterface::goHome() {
 
 SerialInterface* SerialInterface::createSerialInterface(const std::string& portName, unsigned int baudRate) {
     return new SerialInterfacePOSIX(portName, baudRate);
+}
+
+std::unique_ptr<SerialInterface> SerialInterface::createSerialInterfaceUnique(const std::string& portName,
+                                                                              unsigned int baudRate) {
+    return std::unique_ptr<SerialInterface>(new SerialInterfacePOSIX(portName, baudRate));
 }
 
 }

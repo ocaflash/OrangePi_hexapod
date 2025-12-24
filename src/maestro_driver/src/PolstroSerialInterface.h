@@ -1,6 +1,7 @@
 #ifndef POLSTROSERIALINTERFACE_H_
 #define POLSTROSERIALINTERFACE_H_
 
+#include <memory>
 #include <string>
 
 namespace Polstro {
@@ -25,6 +26,8 @@ public:
     bool goHome();
 
     static SerialInterface* createSerialInterface(const std::string& portName, unsigned int baudRate);
+    static std::unique_ptr<SerialInterface> createSerialInterfaceUnique(const std::string& portName,
+                                                                        unsigned int baudRate);
 
 private:
     static const unsigned int mMinChannelValue = 2000;
