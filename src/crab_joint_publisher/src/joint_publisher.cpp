@@ -8,7 +8,7 @@ const std::string names[3] = {"coxa_joint", "femur_joint", "tibia_joint"};
 class JointPublisher : public rclcpp::Node {
 public:
     JointPublisher() : Node("crab_joint_publisher") {
-        joint_msg_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("crab_joint_publisher", 1);
+        joint_msg_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 1);
         sub_ = this->create_subscription<crab_msgs::msg::LegsJointsState>(
             "joints_to_controller", 1,
             std::bind(&JointPublisher::chatterLegsState, this, std::placeholders::_1));
