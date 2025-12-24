@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ros2-ci:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ROS 2
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+
+      - name: Build & test (colcon)
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          ros-distro: jazzy
+          # repo root is a colcon workspace (src/ contains packages)
+          target-ros2-workspace: .
+
