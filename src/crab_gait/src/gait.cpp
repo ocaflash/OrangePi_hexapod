@@ -1,4 +1,18 @@
 #include "gait.hpp"
+#include <algorithm>
+
+namespace {
+double clamp_time(const KDL::Trajectory_Segment* trajectory, double t) {
+    if (!trajectory) {
+        return t;
+    }
+    const double duration = trajectory->Duration();
+    if (duration <= 0.0) {
+        return 0.0;
+    }
+    return std::min(std::max(0.0, t), duration);
+}
+}  // namespace
 
 Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0) {
     legs_queue_.push(5);
@@ -73,13 +87,13 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
 
     passed_sec_ = now_sec - begin_sec_;
     for (int i = phase_; i < num_legs_; i += 2) {
-        frame = trajectory_transfer->Pos(passed_sec_);
+        frame = trajectory_transfer->Pos(clamp_time(trajectory_transfer, passed_sec_));
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
         final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
     }
     for (int i = !phase_; i < num_legs_; i += 2) {
-        frame = trajectory_support->Pos(passed_sec_);
+        frame = trajectory_support->Pos(clamp_time(trajectory_support, passed_sec_));
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
         final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
@@ -134,7 +148,7 @@ KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter
 
 void Gait::getTipVector(KDL::Trajectory_Segment *trajectory, double phase_offset, std::vector<KDL::Frame>::const_iterator vector_iter, double scale) {
     KDL::Frame frame;
-    frame = trajectory->Pos(passed_sec_ + phase_offset);
+    frame = trajectory->Pos(clamp_time(trajectory, passed_sec_ + phase_offset));
     frame.p.x(frame.p.data[0] * scale);
     frame.p.y(frame.p.data[1] * scale);
     final_vector_[legs_queue_.front()] = frame.M * (*(vector_iter + legs_queue_.front())).p + frame.p;
