@@ -13,6 +13,13 @@ echo "=== [$(date)] Автообновление OrangePi_hexapod ==="
 # Переходим в каталог проекта
 cd "$REPO_DIR" || { echo "❌ Не найден каталог $REPO_DIR"; exit 1; }
 
+# На устройствах мы часто делаем `chmod +x` для удобства запуска скриптов.
+# Git отслеживает executable-бит, из-за чего `git checkout` каждый раз показывает "M file".
+# По умолчанию игнорируем изменения filemode в этом репозитории (можно отключить: GIT_IGNORE_FILEMODE=0).
+if [ "${GIT_IGNORE_FILEMODE:-1}" = "1" ]; then
+    git config core.filemode false >/dev/null 2>&1 || true
+fi
+
 # Получаем список веток
 echo "→ Получаем список веток..."
 git fetch --all --prune
@@ -25,10 +32,12 @@ if [ "${SKIP_BRANCH_PROMPT:-0}" != "1" ]; then
         CURRENT_BRANCH="$DEFAULT_BRANCH"
     fi
 
-    # Build list of origin branches (short names without 'origin/')
-    mapfile -t BRANCH_LIST < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin \
+    # Build list of origin branches (short names without 'origin/').
+    # Use refs/remotes/origin/* to avoid picking up a bare 'origin' entry on some setups.
+    mapfile -t BRANCH_LIST < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin/\* \
         | sed 's#^origin/##' \
-        | grep -vE '^(HEAD)$' \
+        | grep -vE '^(HEAD|origin)$' \
+        | grep -vE '^$' \
         | sort -u)
 
     echo ""
