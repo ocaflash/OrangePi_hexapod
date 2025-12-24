@@ -155,7 +155,11 @@ colcon build \
 
 # Подключаем окружение
 echo "→ Активируем окружение..."
+# colcon-generated setup.* scripts may reference variables like COLCON_TRACE without defaults.
+# With `set -u` (nounset) enabled this can abort the script. Temporarily disable nounset for sourcing.
+set +u
 source "$WORKSPACE/install/setup.bash"
+set -u
 
 # Делаем скрипты исполняемыми
 chmod +x "$REPO_DIR/start_hexapod.sh"
