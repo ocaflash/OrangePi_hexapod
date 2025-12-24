@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <cstdio>
+#include <cstring>
 #include <unistd.h>
 #include <termios.h>
 #include <cassert>
@@ -9,9 +10,22 @@
 
 namespace Polstro {
 
-SerialInterfacePOSIX::SerialInterfacePOSIX(const std::string& portName)
+namespace {
+speed_t baudRateToSpeedT(unsigned int baudRate) {
+    switch (baudRate) {
+        case 9600: return B9600;
+        case 19200: return B19200;
+        case 38400: return B38400;
+        case 57600: return B57600;
+        case 115200: return B115200;
+        default: return B115200;
+    }
+}
+}  // namespace
+
+SerialInterfacePOSIX::SerialInterfacePOSIX(const std::string& portName, unsigned int baudRate)
     : SerialInterface(portName), mFileDescriptor(-1) {
-    mFileDescriptor = openPort(portName);
+    mFileDescriptor = openPort(portName, baudRate);
 }
 
 SerialInterfacePOSIX::~SerialInterfacePOSIX() {
@@ -26,7 +40,7 @@ bool SerialInterfacePOSIX::isOpen() const {
     return mFileDescriptor != -1;
 }
 
-int SerialInterfacePOSIX::openPort(const std::string& portName) {
+int SerialInterfacePOSIX::openPort(const std::string& portName, unsigned int baudRate) {
     int fd = open(portName.c_str(), O_RDWR | O_NOCTTY);
     if (fd == -1) {
         perror(portName.c_str());
@@ -35,11 +49,22 @@ int SerialInterfacePOSIX::openPort(const std::string& portName) {
     
     // Configure serial port
     struct termios options;
-    tcgetattr(fd, &options);
+    if (tcgetattr(fd, &options) != 0) {
+        std::fprintf(stderr, "tcgetattr() failed for %s: %s (errno=%d)\n", portName.c_str(),
+                     std::strerror(errno), errno);
+        close(fd);
+        return -1;
+    }
     
-    // Set baud rate to 115200
-    cfsetispeed(&options, B115200);
-    cfsetospeed(&options, B115200);
+    // Set baud rate
+    const speed_t speed = baudRateToSpeedT(baudRate);
+    if (baudRate != 9600 && baudRate != 19200 && baudRate != 38400 && baudRate != 57600 &&
+        baudRate != 115200) {
+        std::fprintf(stderr, "Unsupported baudRate=%u for %s; falling back to 115200\n", baudRate,
+                     portName.c_str());
+    }
+    cfsetispeed(&options, speed);
+    cfsetospeed(&options, speed);
     
     // 8N1 mode
     options.c_cflag &= ~PARENB;  // No parity
@@ -55,7 +80,12 @@ int SerialInterfacePOSIX::openPort(const std::string& portName) {
     options.c_iflag &= ~(IXON | IXOFF | IXANY);
     options.c_oflag &= ~OPOST;
     
-    tcsetattr(fd, TCSANOW, &options);
+    if (tcsetattr(fd, TCSANOW, &options) != 0) {
+        std::fprintf(stderr, "tcsetattr() failed for %s: %s (errno=%d)\n", portName.c_str(),
+                     std::strerror(errno), errno);
+        close(fd);
+        return -1;
+    }
     
     return fd;
 }
@@ -64,7 +94,7 @@ bool SerialInterfacePOSIX::writeBytes(const unsigned char* data, unsigned int nu
     assert(isOpen());
     ssize_t ret = write(mFileDescriptor, data, numBytesToWrite);
     if (ret == -1) {
-        printf("Error writing. errno=%d\n", errno);
+        std::fprintf(stderr, "Serial write() failed: %s (errno=%d)\n", std::strerror(errno), errno);
         return false;
     }
     assert(ret == static_cast<ssize_t>(numBytesToWrite));
@@ -75,7 +105,7 @@ bool SerialInterfacePOSIX::readBytes(unsigned char* data, unsigned int numBytesT
     assert(isOpen());
     ssize_t ret = read(mFileDescriptor, data, numBytesToRead);
     if (ret == -1) {
-        printf("Error reading. errno=%d\n", errno);
+        std::fprintf(stderr, "Serial read() failed: %s (errno=%d)\n", std::strerror(errno), errno);
         return false;
     }
     assert(ret == static_cast<ssize_t>(numBytesToRead));

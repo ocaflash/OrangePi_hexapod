@@ -2,6 +2,7 @@
 #include <crab_msgs/msg/legs_joints_state.hpp>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include "PolstroSerialInterface.h"
 
 const int rotation_direction[18] = {
@@ -36,7 +37,7 @@ public:
 
         std::string port_name = this->get_parameter("port_name").as_string();
         int baud_rate = this->get_parameter("baud_rate").as_int();
-        maestro_ = Polstro::SerialInterface::createSerialInterface(port_name, baud_rate);
+        maestro_.reset(Polstro::SerialInterface::createSerialInterface(port_name, baud_rate));
 
         if (maestro_ && maestro_->isOpen()) {
             RCLCPP_INFO(this->get_logger(), "Maestro servo controller connected on %s", port_name.c_str());
@@ -55,11 +56,7 @@ public:
         RCLCPP_INFO(this->get_logger(), "Maestro servo controller is ready...");
     }
 
-    ~MaestroController() {
-        if (maestro_) {
-            delete maestro_;
-        }
-    }
+    ~MaestroController() = default;
 
 private:
     void initTimerCallback() {
@@ -134,7 +131,7 @@ private:
         }
     }
 
-    Polstro::SerialInterface* maestro_;
+    std::unique_ptr<Polstro::SerialInterface> maestro_;
     double joint_lower_limit_, joint_upper_limit_, limit_coef_, max_speed_;
     float current_pos_[18];
     float target_pos_[18];

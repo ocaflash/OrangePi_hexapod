@@ -7,13 +7,13 @@ namespace Polstro {
 
 class SerialInterfacePOSIX : public SerialInterface {
 public:
-    SerialInterfacePOSIX(const std::string& portName);
+    SerialInterfacePOSIX(const std::string& portName, unsigned int baudRate);
     virtual ~SerialInterfacePOSIX();
 
     virtual bool isOpen() const;
 
 private:
-    int openPort(const std::string& portName);
+    int openPort(const std::string& portName, unsigned int baudRate);
     virtual bool writeBytes(const unsigned char* data, unsigned int dataSizeInBytes);
     virtual bool readBytes(unsigned char* data, unsigned int dataSizeInBytes);
 

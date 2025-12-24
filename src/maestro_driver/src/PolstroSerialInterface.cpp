@@ -77,7 +77,7 @@ bool SerialInterface::goHome() {
 }
 
 SerialInterface* SerialInterface::createSerialInterface(const std::string& portName, unsigned int baudRate) {
-    return new SerialInterfacePOSIX(portName);
+    return new SerialInterfacePOSIX(portName, baudRate);
 }
 
 }

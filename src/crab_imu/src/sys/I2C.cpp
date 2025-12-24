@@ -15,7 +15,6 @@
 #include "I2C.h"
 #include <iostream>
 //#include <math.h>
-using namespace std;
 #define MAX_BUS 64
 
 I2C::I2C(int bus, int address) {
@@ -31,11 +30,11 @@ int I2C::writeI2CDeviceByte(char address, char value) {
 	snprintf(namebuf, sizeof(namebuf), "/dev/i2c-%d", I2CBus);
 	int file;
 	if ((file = open(namebuf, O_RDWR)) < 0) {
-		cout << "Failed to open Sensor on " << namebuf << " I2C Bus" << endl;
+		std::cerr << "Failed to open Sensor on " << namebuf << " I2C Bus" << std::endl;
 		return (1);
 	}
 	if (ioctl(file, I2C_SLAVE, I2CAddress) < 0) {
-		cout << "I2C_SLAVE address " << I2CAddress << " failed..." << endl;
+		std::cerr << "I2C_SLAVE address " << I2CAddress << " failed..." << std::endl;
 		return (2);
 	}
 
@@ -54,7 +53,7 @@ int I2C::writeI2CDeviceByte(char address, char value) {
 	buffer[0] = address;
 	buffer[1] = value;
 	if (write(file, buffer, 2) != 2) {
-		cout << "Failure to write values to I2C Device address." << endl;
+		std::cerr << "Failure to write values to I2C Device address." << std::endl;
 		return (3);
 	}
 	close(file);
@@ -68,25 +67,25 @@ int I2C::readI2CDeviceMultipleByte(char address, int quantity) {
 	snprintf(namebuf, sizeof(namebuf), "/dev/i2c-%d", I2CBus);
 	int file;
 	if ((file = open(namebuf, O_RDWR)) < 0) {
-		cout << "Failed to open BMA180 Sensor on " << namebuf << " I2C Bus"
-				<< endl;
+		std::cerr << "Failed to open BMA180 Sensor on " << namebuf << " I2C Bus"
+				<< std::endl;
 		return (1);
 	}
 	if (ioctl(file, I2C_SLAVE, I2CAddress) < 0) {
-		cout << "I2C_SLAVE address " << I2CAddress << " failed..." << endl;
+		std::cerr << "I2C_SLAVE address " << I2CAddress << " failed..." << std::endl;
 		return (2);
 	}
 
 	char buf[1];
 	buf[0] = address;
 	if (write(file, buf, 1) != 1) {
-		cout << "Failed to Reset Address in readFullSensorState() " << endl;
+		std::cerr << "Failed to Reset Address in readFullSensorState() " << std::endl;
 	}
 
 	//int numberBytes = BUFFER_SIZE;
 	int bytesRead = read(file, this->dataBuffer, quantity);
 	if (bytesRead == -1) {
-		cout << "Failure to read Byte Stream in readFullSensorState()" << endl;
+		std::cerr << "Failure to read Byte Stream in readFullSensorState()" << std::endl;
 	}
 	close(file);
 
@@ -109,25 +108,25 @@ char I2C::readI2CDeviceByte(char address) {
 	snprintf(namebuf, sizeof(namebuf), "/dev/i2c-%d", I2CBus);
 	int file;
 	if ((file = open(namebuf, O_RDWR)) < 0) {
-		cout << "Failed to open Sensor on " << namebuf << " I2C Bus" << endl;
+		std::cerr << "Failed to open Sensor on " << namebuf << " I2C Bus" << std::endl;
 		return (1);
 	}
 	if (ioctl(file, I2C_SLAVE, I2CAddress) < 0) {
-		cout << "I2C_SLAVE address " << I2CAddress << " failed..." << endl;
+		std::cerr << "I2C_SLAVE address " << I2CAddress << " failed..." << std::endl;
 		return (2);
 	}
 
 	char buf[1];
 	buf[0] = address;
 	if (write(file, buf, 1) != 1) {
-		cout << "Failed to Reset Address in readFullSensorState() " << endl;
+		std::cerr << "Failed to Reset Address in readFullSensorState() " << std::endl;
 	}
 
 	unsigned char buffer[2];
 	buffer[0] = 0;
 	buffer[1] = 0;
 	if (read(file, buffer, 2) != 2) {
-		cout << "Failure to read value from I2C Device address." << endl;
+		std::cerr << "Failure to read value from I2C Device address." << std::endl;
 	}
 	close(file);
 	//cout << (int) buffer [0] << endl;

@@ -1,7 +1,5 @@
 #include "imu_control.hpp"
 
-using namespace std;
-
 // Uncomment the below line to use this axis definition:
    // X axis pointing forward
    // Y axis pointing to the right
