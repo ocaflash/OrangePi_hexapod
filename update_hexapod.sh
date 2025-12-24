@@ -85,6 +85,30 @@ if ! command -v colcon >/dev/null 2>&1; then
     exit 1
 fi
 
+# Иногда после смены режима установки (copy -> --symlink-install) остаются директории там,
+# где ament_cmake_python ожидает создать симлинк, и сборка падает сообщением:
+#   "failed to create symbolic link ... because existing path cannot be removed: Is a directory"
+# Это безопасно лечится удалением таких директорий внутри build/ перед сборкой.
+COLCON_FIX_PY_SYMLINKS="${COLCON_FIX_PY_SYMLINKS:-1}"
+if [ "$COLCON_FIX_PY_SYMLINKS" = "1" ]; then
+    echo "→ Предочистка build/*/ament_cmake_python/*/* (защита от конфликтов symlink-install)..."
+    while IFS= read -r pkg; do
+        [ -n "$pkg" ] || continue
+        p="$WORKSPACE/build/$pkg/ament_cmake_python/$pkg/$pkg"
+        if [ -d "$p" ] && [ ! -L "$p" ]; then
+            echo "  - удаляю конфликтующую директорию: $p"
+            rm -rf "$p"
+        fi
+    done < <(colcon list --names-only 2>/dev/null || true)
+fi
+
+# Полная очистка workspace по запросу (долго, но решает любые проблемы с кэшем)
+# Пример: CLEAN_BUILD=1 ./update_hexapod.sh
+if [ "${CLEAN_BUILD:-0}" = "1" ]; then
+    echo "→ CLEAN_BUILD=1: удаляю $WORKSPACE/build $WORKSPACE/install $WORKSPACE/log ..."
+    rm -rf "$WORKSPACE/build" "$WORKSPACE/install" "$WORKSPACE/log"
+fi
+
 # Heuristic: на слабых платах сборка часто 'зависает' из-за swap thrash.
 # Ограничиваем параллелизм и включаем прямой вывод, чтобы было видно реальный прогресс компиляции.
 CPU_CORES=1
