@@ -17,17 +17,48 @@ cd "$REPO_DIR" || { echo "❌ Не найден каталог $REPO_DIR"; exit 
 echo "→ Получаем список веток..."
 git fetch --all --prune
 
-# Показываем доступные ветки
+# Выбор ветки (интерактивный, но упрощённый)
 if [ "${SKIP_BRANCH_PROMPT:-0}" != "1" ]; then
+    # Prefer current branch as default; fallback to DEFAULT_BRANCH if detached.
+    CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [ -z "$CURRENT_BRANCH" ] || [ "$CURRENT_BRANCH" = "HEAD" ]; then
+        CURRENT_BRANCH="$DEFAULT_BRANCH"
+    fi
+
+    # Build list of origin branches (short names without 'origin/')
+    mapfile -t BRANCH_LIST < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin \
+        | sed 's#^origin/##' \
+        | grep -vE '^(HEAD)$' \
+        | sort -u)
+
     echo ""
-    echo "Доступные ветки:"
-    echo "----------------"
-    git branch -a | grep -v HEAD | sed 's/remotes\/origin\//  /' | sort -u
+    echo "Доступные ветки (origin):"
+    echo "------------------------"
+    for i in "${!BRANCH_LIST[@]}"; do
+        idx=$((i + 1))
+        b="${BRANCH_LIST[$i]}"
+        if [ "$b" = "$CURRENT_BRANCH" ]; then
+            echo "  $idx) $b  [current]"
+        else
+            echo "  $idx) $b"
+        fi
+    done
     echo ""
 
-    # Выбор ветки
-    read -p "Введите имя ветки (Enter для '$DEFAULT_BRANCH'): " BRANCH
-    BRANCH=${BRANCH:-$DEFAULT_BRANCH}
+    read -p "Выберите ветку (Enter = '$CURRENT_BRANCH', номер или имя): " BRANCH_INPUT
+    if [ -z "${BRANCH_INPUT}" ]; then
+        BRANCH="$CURRENT_BRANCH"
+    elif [[ "${BRANCH_INPUT}" =~ ^[0-9]+$ ]]; then
+        n="${BRANCH_INPUT}"
+        if [ "$n" -ge 1 ] && [ "$n" -le "${#BRANCH_LIST[@]}" ]; then
+            BRANCH="${BRANCH_LIST[$((n - 1))]}"
+        else
+            echo "❌ Неверный номер ветки: $n"
+            exit 1
+        fi
+    else
+        BRANCH="${BRANCH_INPUT}"
+    fi
 else
     # Для автоматического перезапуска после обновления самого скрипта
     BRANCH=${BRANCH:-$DEFAULT_BRANCH}
