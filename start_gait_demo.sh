@@ -29,7 +29,13 @@ if [ -z "$SETUP_FOUND" ]; then
   exit 1
 fi
 
-colcon build --packages-select crab_msgs crab_description
+colcon build --packages-select \
+  crab_msgs \
+  crab_description \
+  crab_leg_kinematics \
+  crab_body_kinematics \
+  crab_gait \
+  crab_joint_publisher
 source "$SETUP_FOUND"
 
 ros2 launch crab_description demo_gait.launch.py use_primitives:="$USE_PRIMITIVES"
