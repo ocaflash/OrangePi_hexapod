@@ -36,14 +36,15 @@ if [ "${SKIP_BRANCH_PROMPT:-0}" != "1" ]; then
     fi
 
     # Build list of origin branches (short names without 'origin/').
-    # Use refs/remotes/origin/* to avoid picking up a bare 'origin' entry on some setups.
-    mapfile -t BRANCH_LIST < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin/\* \
+    # IMPORTANT: remote branches may contain slashes (e.g. origin/ver-3/convert_to_ros2),
+    # so we must NOT use refs/remotes/origin/* (it matches only one path segment).
+    mapfile -t BRANCH_LIST < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin \
         | sed 's#^origin/##' \
         | grep -vE '^(HEAD|origin)$' \
         | grep -vE '^$' \
         | sort -u)
 
-    echo ""
+echo ""
     echo "Доступные ветки (origin):"
     echo "------------------------"
     for i in "${!BRANCH_LIST[@]}"; do
@@ -55,7 +56,7 @@ if [ "${SKIP_BRANCH_PROMPT:-0}" != "1" ]; then
             echo "  $idx) $b"
         fi
     done
-    echo ""
+echo ""
 
     read -p "Выберите ветку (Enter = '$CURRENT_BRANCH', номер или имя): " BRANCH_INPUT
     if [ -z "${BRANCH_INPUT}" ]; then
@@ -73,7 +74,7 @@ if [ "${SKIP_BRANCH_PROMPT:-0}" != "1" ]; then
     fi
 else
     # Для автоматического перезапуска после обновления самого скрипта
-    BRANCH=${BRANCH:-$DEFAULT_BRANCH}
+BRANCH=${BRANCH:-$DEFAULT_BRANCH}
     echo "→ Используем ветку (без запроса): '$BRANCH'"
 fi
 
