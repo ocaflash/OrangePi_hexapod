@@ -22,7 +22,10 @@ fi
 
 # Получаем список веток
 echo "→ Получаем список веток..."
-git fetch --all --prune
+# Важно: в некоторых конфигурациях git remote "origin" может быть настроен так,
+# что `git fetch` подтягивает только main (ограниченный fetch refspec).
+# Явно подтягиваем ВСЕ ветки, чтобы список origin/* был полным.
+git fetch origin --prune '+refs/heads/*:refs/remotes/origin/*'
 
 # Выбор ветки (интерактивный, но упрощённый)
 if [ "${SKIP_BRANCH_PROMPT:-0}" != "1" ]; then
