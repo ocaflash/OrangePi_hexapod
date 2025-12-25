@@ -175,9 +175,25 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         // Leg radius adjustment when seated (L2 trigger pressed - use axis, not button)
         // L2 axis: 1.0 = not pressed, -1.0 = fully pressed
         bool l2_pressed = (joy->axes.size() > DS4_AXIS_L2) && (joy->axes[DS4_AXIS_L2] < 0.5);
+
+        // Helpful hint: sticks won't walk while seated (start_flag_ == false)
+        const bool sticks_moved =
+            (std::abs(ax_lx) > 0.2f) || (std::abs(ax_ly) > 0.2f) ||
+            (std::abs(ax_rx) > 0.2f) || (std::abs(ax_ry) > 0.2f);
+        if (sticks_moved && !l2_pressed) {
+            RCLCPP_INFO_THROTTLE(
+                this->get_logger(), *this->get_clock(), 2000,
+                "Robot is SEATED. Press OPTIONS to stand up; walking commands are ignored while seated. "
+                "(Deadzone=%.2f)", DEADZONE);
+        }
+
         if (l2_pressed && !imu_flag_) {
             body_state_.z = -0.016;  // Seated position
             body_state_.leg_radius = 0.06 * ax_rx + 0.11;
+            // Keep seated posture stable (avoid confusing stale RPY output)
+            body_state_.roll = 0.0;
+            body_state_.pitch = 0.0;
+            body_state_.yaw = 0.0;
             move_body_pub_->publish(body_state_);
             RCLCPP_DEBUG(this->get_logger(), "L2 pressed: leg_radius=%.3f", body_state_.leg_radius);
         }
