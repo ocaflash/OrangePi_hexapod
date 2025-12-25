@@ -11,6 +11,18 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('crab_description')
     xacro_file = os.path.join(pkg_share, 'models', 'crab_model.xacro')
     config_file = os.path.join(pkg_share, 'config', 'robot_geometry.yaml')
+
+    # --- Joystick device selection (for joy_node) ---
+    # Many controllers appear as /dev/input/js0, but can also be js1/js2 depending on boot order.
+    # Allow override via environment variable JOY_DEV, and expose as launch argument joy_dev.
+    joy_dev_default = os.environ.get('JOY_DEV', '').strip()
+    if not joy_dev_default:
+        for candidate in ('/dev/input/js0', '/dev/input/js1', '/dev/input/js2', '/dev/input/js3'):
+            if os.path.exists(candidate):
+                joy_dev_default = candidate
+                break
+    if not joy_dev_default:
+        joy_dev_default = '/dev/input/js0'
     
     # Загрузка конфига геометрии
     with open(config_file, 'r') as f:
@@ -48,11 +60,17 @@ def generate_launch_description():
         default_value='false',
         description='Use primitive geometry instead of STL meshes'
     )
+    joy_dev_arg = DeclareLaunchArgument(
+        'joy_dev',
+        default_value=joy_dev_default,
+        description='Joystick device path for joy_node (e.g. /dev/input/js0)'
+    )
 
     return LaunchDescription([
         port_name_arg,
         use_primitives_arg,
         imu_autostart_arg,
+        joy_dev_arg,
         
         # Robot State Publisher (публикует URDF)
         Node(
@@ -139,5 +157,8 @@ def generate_launch_description():
         Node(
             package='joy',
             executable='joy_node',
+            parameters=[{
+                'dev': LaunchConfiguration('joy_dev'),
+            }],
         ),
     ])
