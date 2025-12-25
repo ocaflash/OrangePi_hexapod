@@ -50,6 +50,11 @@ def generate_launch_description():
         default_value='/dev/ttyS5',
         description='Serial port for Maestro servo controller'
     )
+    maestro_protocol_arg = DeclareLaunchArgument(
+        'maestro_protocol',
+        default_value=os.environ.get('MAESTRO_PROTOCOL', 'compact'),
+        description='Maestro serial protocol: compact or mini_ssc'
+    )
     imu_autostart_arg = DeclareLaunchArgument(
         'imu_autostart',
         default_value='false',
@@ -73,6 +78,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         port_name_arg,
+        maestro_protocol_arg,
         use_primitives_arg,
         imu_autostart_arg,
         joy_dev_arg,
@@ -158,7 +164,8 @@ def generate_launch_description():
             executable='servo_node',
             parameters=[{
                 'port_name': LaunchConfiguration('port_name'),
-                'baud_rate': 115200
+                'baud_rate': 115200,
+                'protocol': LaunchConfiguration('maestro_protocol'),
             }],
         ),
         

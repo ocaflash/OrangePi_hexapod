@@ -22,17 +22,31 @@ public:
         this->declare_parameter<std::string>("port_name", "/dev/ttyS5");
         this->declare_parameter<int>("baud_rate", 115200);
         this->declare_parameter<double>("max_speed", 5.0);  // max change per update
+        // Maestro serial protocol:
+        // - "compact": Pololu Maestro Compact Protocol (0x84 ...) expects target in quarter-microseconds.
+        // - "mini_ssc": MiniSSC protocol (0xFF ...) expects normalized 0..254.
+        this->declare_parameter<std::string>("protocol", "compact");
+        // Only used for protocol=compact (quarter-microseconds, e.g. 4000..8000 with center 6000)
+        this->declare_parameter<int>("target_min", 4000);
+        this->declare_parameter<int>("target_max", 8000);
+        this->declare_parameter<int>("target_center", 6000);
 
         joint_lower_limit_ = this->get_parameter("joint_lower_limit").as_double();
         joint_upper_limit_ = this->get_parameter("joint_upper_limit").as_double();
         max_speed_ = this->get_parameter("max_speed").as_double();
+        protocol_ = this->get_parameter("protocol").as_string();
+        target_min_ = this->get_parameter("target_min").as_int();
+        target_max_ = this->get_parameter("target_max").as_int();
+        target_center_ = this->get_parameter("target_center").as_int();
+
+        // Scale from joint angle to normalized [-127..127] for MiniSSC (0..254)
         limit_coef_ = 127 / ((joint_upper_limit_ - joint_lower_limit_) / 2);
 
         // Initialize current positions - assume servos might be anywhere
         // We'll smoothly move them to neutral during initialization
         for (int i = 0; i < 18; i++) {
             current_pos_[i] = -1.0f;  // -1 means unknown position
-            target_pos_[i] = 127.0f;  // Target is neutral
+            target_pos_[i] = 127.0f;  // Target is neutral for MiniSSC mode
         }
 
         std::string port_name = this->get_parameter("port_name").as_string();
@@ -41,6 +55,8 @@ public:
 
         if (maestro_ && maestro_->isOpen()) {
             RCLCPP_INFO(this->get_logger(), "Maestro servo controller connected on %s", port_name.c_str());
+            RCLCPP_INFO(this->get_logger(), "Maestro protocol=%s (compact uses %d..%d center=%d)",
+                        protocol_.c_str(), target_min_, target_max_, target_center_);
             // Start smooth initialization timer
             init_timer_ = this->create_wall_timer(
                 std::chrono::milliseconds(30),
@@ -59,6 +75,21 @@ public:
     ~MaestroController() = default;
 
 private:
+    void sendTarget(int channel, float normalized_or_target) {
+        if (!maestro_ || !maestro_->isOpen()) return;
+
+        if (protocol_ == "mini_ssc") {
+            unsigned char v = static_cast<unsigned char>(std::clamp(normalized_or_target, 0.0f, 254.0f));
+            maestro_->setTargetMSS(static_cast<unsigned char>(channel), v);
+            return;
+        }
+
+        // Default: compact protocol target in quarter-microseconds
+        unsigned short t = static_cast<unsigned short>(
+            std::clamp(normalized_or_target, static_cast<float>(target_min_), static_cast<float>(target_max_)));
+        maestro_->setTarget(static_cast<unsigned char>(channel), t);
+    }
+
     void initTimerCallback() {
         if (!maestro_ || !maestro_->isOpen()) return;
         
@@ -86,7 +117,12 @@ private:
                     current_pos_[i] = target_pos_[i];
                 }
             }
-            maestro_->setTargetMSS(i, static_cast<unsigned char>(current_pos_[i]));
+            if (protocol_ == "mini_ssc") {
+                sendTarget(i, current_pos_[i]);
+            } else {
+                // compact: go to center pulse
+                sendTarget(i, static_cast<float>(target_center_));
+            }
         }
         
         if (all_done) {
@@ -114,8 +150,18 @@ private:
         for (int i = 0; i < num_legs_; i++) {
             for (int j = 0; j < num_joints_; j++) {
                 s_num = i * 3 + j;
-                float target = 127.0f + rotation_direction[s_num] * legs_jnts->joints_state[i].joint[j] * limit_coef_;
-                target = std::clamp(target, 0.0f, 254.0f);
+                float target;
+                if (protocol_ == "mini_ssc") {
+                    target = 127.0f + rotation_direction[s_num] * legs_jnts->joints_state[i].joint[j] * limit_coef_;
+                    target = std::clamp(target, 0.0f, 254.0f);
+                } else {
+                    // compact: map joint angle to pulse width around center
+                    const double half_range = (joint_upper_limit_ - joint_lower_limit_) / 2.0;
+                    const double amplitude = (target_max_ - target_min_) / 2.0;
+                    const double norm = std::clamp(legs_jnts->joints_state[i].joint[j] / half_range, -1.0, 1.0);
+                    target = static_cast<float>(target_center_ + rotation_direction[s_num] * norm * amplitude);
+                    target = std::clamp(target, static_cast<float>(target_min_), static_cast<float>(target_max_));
+                }
                 
                 // Smooth movement: limit speed of change
                 float diff = target - current_pos_[s_num];
@@ -125,16 +171,21 @@ private:
                     current_pos_[s_num] = target;
                 }
                 
-                unsigned char target_byte = static_cast<unsigned char>(current_pos_[s_num]);
-                maestro_->setTargetMSS(s_num, target_byte);
+                sendTarget(s_num, current_pos_[s_num]);
             }
         }
+
+        RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                              "ch0=%.1f ch1=%.1f ch2=%.1f protocol=%s",
+                              current_pos_[0], current_pos_[1], current_pos_[2], protocol_.c_str());
     }
 
     std::unique_ptr<Polstro::SerialInterface> maestro_;
     double joint_lower_limit_, joint_upper_limit_, limit_coef_, max_speed_;
     float current_pos_[18];
     float target_pos_[18];
+    std::string protocol_;
+    int target_min_, target_max_, target_center_;
     bool initialized_;
     int init_step_;
     rclcpp::TimerBase::SharedPtr init_timer_;
