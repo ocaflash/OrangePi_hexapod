@@ -4,9 +4,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <kdl/frames.hpp>
 #include <kdl/path_line.hpp>
-#include <kdl/rotational_interpolation_sa.hpp>
 #include <kdl/trajectory_segment.hpp>
-#include <kdl/velocityprofile_spline.hpp>
 #include <kdl/path_roundedcomposite.hpp>
 #include <kdl/rotational_interpolation_sa.hpp>
 #include <queue>
@@ -45,9 +43,6 @@ private:
     double low_rad_, high_rad_, height_, z_body_;
     double path_tolerance_, rounded_radius_;
     KDL::Vector final_vector_[NUM_LEGS];
-    std::unique_ptr<KDL::Path_Line> path_support_;
-    std::unique_ptr<KDL::Path_RoundedComposite> path_transfer_;
-    KDL::VelocityProfile_Spline prof_support_, prof_transfer_;
     // NOTE: Trajectories reference paths, so they must be destroyed before the paths.
     std::unique_ptr<KDL::Trajectory_Segment> trajectory_transfer_;
     std::unique_ptr<KDL::Trajectory_Segment> trajectory_support_;

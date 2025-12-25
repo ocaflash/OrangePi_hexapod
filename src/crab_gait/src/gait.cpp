@@ -1,5 +1,6 @@
 #include "gait.hpp"
 #include <algorithm>
+#include <kdl/velocityprofile_spline.hpp>
 
 namespace {
 double clamp_time(const KDL::Trajectory_Segment* trajectory, double t) {
@@ -48,33 +49,35 @@ void Gait::setAlpha(double alpha) {
 }
 
 void Gait::setPath() {
-    // IMPORTANT: trajectories hold references to paths.
-    // We must destroy old trajectories BEFORE replacing paths, otherwise KDL can crash
-    // with invalid free/double free when old trajectory destructors touch freed paths.
-    trajectory_support_.reset();
-    trajectory_transfer_.reset();
-
-    // KDL Path_* classes take a RotationalInterpolation*; in practice they manage (delete) it.
-    // Do NOT pass a pointer to a stack/member object here, and do not share one instance
-    // across multiple paths (can cause invalid free / double free).
-    auto* rot_support = new KDL::RotationalInterpolation_SingleAxis();
-    auto* rot_transfer = new KDL::RotationalInterpolation_SingleAxis();
-
-    path_support_ = std::make_unique<KDL::Path_Line>(d, a, rot_support, path_tolerance_, true);
-
-    path_transfer_ = std::make_unique<KDL::Path_RoundedComposite>(rounded_radius_, path_tolerance_, rot_transfer);
-    path_transfer_->Add(a);
-    path_transfer_->Add(b);
-    path_transfer_->Add(c);
-    path_transfer_->Add(d);
-    path_transfer_->Finish();
+    // Paths are created inside setTrajectory() so that Trajectory_Segment can own all KDL
+    // heap objects consistently (avoids invalid free with stack/member pointers).
 }
 
 void Gait::setTrajectory(double sup_path_duration, double tran_path_duration) {
-    prof_support_.SetProfileDuration(0, path_support_->PathLength(), sup_path_duration);
-    prof_transfer_.SetProfileDuration(0, path_transfer_->PathLength(), tran_path_duration);
-    trajectory_transfer_ = std::make_unique<KDL::Trajectory_Segment>(path_transfer_.get(), &prof_transfer_);
-    trajectory_support_ = std::make_unique<KDL::Trajectory_Segment>(path_support_.get(), &prof_support_);
+    // Destroy old trajectories first (they may free their internal objects)
+    trajectory_support_.reset();
+    trajectory_transfer_.reset();
+
+    // Allocate everything on heap and hand pointers to Trajectory_Segment.
+    // KDL trajectory/path classes are known to manage (delete) the objects passed in.
+    auto* rot_support = new KDL::RotationalInterpolation_SingleAxis();
+    auto* rot_transfer = new KDL::RotationalInterpolation_SingleAxis();
+
+    auto* path_support = new KDL::Path_Line(d, a, rot_support, path_tolerance_, true);
+    auto* path_transfer = new KDL::Path_RoundedComposite(rounded_radius_, path_tolerance_, rot_transfer);
+    path_transfer->Add(a);
+    path_transfer->Add(b);
+    path_transfer->Add(c);
+    path_transfer->Add(d);
+    path_transfer->Finish();
+
+    auto* prof_support = new KDL::VelocityProfile_Spline();
+    auto* prof_transfer = new KDL::VelocityProfile_Spline();
+    prof_support->SetProfileDuration(0, path_support->PathLength(), sup_path_duration);
+    prof_transfer->SetProfileDuration(0, path_transfer->PathLength(), tran_path_duration);
+
+    trajectory_support_ = std::make_unique<KDL::Trajectory_Segment>(path_support, prof_support);
+    trajectory_transfer_ = std::make_unique<KDL::Trajectory_Segment>(path_transfer, prof_transfer);
 }
 
 KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration) {

@@ -178,6 +178,10 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
                 }
                 gait_command_.fi = (scale > 0) ? 0 : 3.14;
                 gait_command_.scale = std::abs(scale);
+                // Allow rotation-in-place with right stick X even if right stick Y (scale) is neutral.
+                if (gait_command_.scale < 0.05 && alpha != 0.0f) {
+                    gait_command_.scale = 0.20;
+                }
                 gait_command_.alpha = ((alpha > 0) ? 1 : -1) * 0.06 * (1 - gait_command_.scale) + 0.11 * alpha;
             } else {
                 // All sticks in neutral - PAUSE
