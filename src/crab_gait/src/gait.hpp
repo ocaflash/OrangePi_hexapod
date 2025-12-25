@@ -8,6 +8,7 @@
 #include <kdl/trajectory_segment.hpp>
 #include <kdl/velocityprofile_spline.hpp>
 #include <kdl/path_roundedcomposite.hpp>
+#include <kdl/rotational_interpolation_sa.hpp>
 #include <queue>
 #include <memory>
 
@@ -44,7 +45,6 @@ private:
     double low_rad_, high_rad_, height_, z_body_;
     double path_tolerance_, rounded_radius_;
     KDL::Vector final_vector_[NUM_LEGS];
-    KDL::RotationalInterpolation_SingleAxis rot_;
     std::unique_ptr<KDL::Path_Line> path_support_;
     std::unique_ptr<KDL::Path_RoundedComposite> path_transfer_;
     KDL::VelocityProfile_Spline prof_support_, prof_transfer_;

@@ -48,9 +48,15 @@ void Gait::setAlpha(double alpha) {
 }
 
 void Gait::setPath() {
-    path_support_ = std::make_unique<KDL::Path_Line>(d, a, &rot_, path_tolerance_, true);
+    // KDL Path_* classes take a RotationalInterpolation*; in practice they manage (delete) it.
+    // Do NOT pass a pointer to a stack/member object here, and do not share one instance
+    // across multiple paths (can cause invalid free / double free).
+    auto* rot_support = new KDL::RotationalInterpolation_SingleAxis();
+    auto* rot_transfer = new KDL::RotationalInterpolation_SingleAxis();
 
-    path_transfer_ = std::make_unique<KDL::Path_RoundedComposite>(rounded_radius_, path_tolerance_, &rot_);
+    path_support_ = std::make_unique<KDL::Path_Line>(d, a, rot_support, path_tolerance_, true);
+
+    path_transfer_ = std::make_unique<KDL::Path_RoundedComposite>(rounded_radius_, path_tolerance_, rot_transfer);
     path_transfer_->Add(a);
     path_transfer_->Add(b);
     path_transfer_->Add(c);
