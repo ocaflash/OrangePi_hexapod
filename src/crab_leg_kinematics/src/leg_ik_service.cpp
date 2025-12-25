@@ -12,6 +12,7 @@ LegKinematics::LegKinematics() : Node("leg_ik_service") {
     this->declare_parameter<double>("joint_upper_limit", KDL::PI / 2);
     this->declare_parameter<int>("maxIterations", 100);
     this->declare_parameter<double>("epsilon", 1e-3);
+    this->declare_parameter<bool>("allow_partial_ik", false);
 }
 
 bool LegKinematics::init() {
@@ -33,6 +34,7 @@ bool LegKinematics::init() {
 
     joint_lower_limit_ = this->get_parameter("joint_lower_limit").as_double();
     joint_upper_limit_ = this->get_parameter("joint_upper_limit").as_double();
+    allow_partial_ik_ = this->get_parameter("allow_partial_ik").as_bool();
     joint_min_.resize(num_joints_);
     joint_max_.resize(num_joints_);
     for (unsigned int i = 0; i < num_joints_; i++) {
@@ -87,8 +89,10 @@ void LegKinematics::getLegIKSolver(const std::shared_ptr<crab_msgs::srv::GetLegI
                                     std::shared_ptr<crab_msgs::srv::GetLegIKSolver::Response> response) {
     crab_msgs::msg::LegPositionState leg_dest_pos;
     response->target_joints.clear();
+    bool all_ok = true;
 
     for (size_t i = 0; i < request->leg_number.size(); i++) {
+        const auto leg_idx = static_cast<size_t>(request->leg_number[i]);
         leg_dest_pos = request->target_position[i];
         KDL::JntArray jnt_pos_in(num_joints_);
         KDL::JntArray jnt_pos_out(num_joints_);
@@ -101,7 +105,15 @@ void LegKinematics::getLegIKSolver(const std::shared_ptr<crab_msgs::srv::GetLegI
         RCLCPP_DEBUG(this->get_logger(), "IK request leg %d: x=%.4f y=%.4f z=%.4f", 
                      request->leg_number[i], leg_dest_pos.x, leg_dest_pos.y, leg_dest_pos.z);
 
-        int ik_valid = ik_solver_pos_[request->leg_number[i]]->CartToJnt(jnt_pos_in, F_dest, jnt_pos_out);
+        if (leg_idx >= num_legs_) {
+            all_ok = false;
+            RCLCPP_ERROR(this->get_logger(), "Invalid leg index %zu in request", leg_idx);
+            // Fallback: pass-through current joints
+            response->target_joints.push_back(request->current_joints[i]);
+            continue;
+        }
+
+        int ik_valid = ik_solver_pos_[leg_idx]->CartToJnt(jnt_pos_in, F_dest, jnt_pos_out);
 
         if (ik_valid >= 0) {
             crab_msgs::msg::LegJointsState jnt_buf;
@@ -109,13 +121,25 @@ void LegKinematics::getLegIKSolver(const std::shared_ptr<crab_msgs::srv::GetLegI
                 jnt_buf.joint[j] = jnt_pos_out(j);
             }
             response->target_joints.push_back(jnt_buf);
-            response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND;
             RCLCPP_DEBUG(this->get_logger(), "IK Solution for leg%s found", kSuffixes[request->leg_number[i]]);
         } else {
-            response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_NOT_FOUND;
+            all_ok = false;
             RCLCPP_ERROR(this->get_logger(), "IK not found for leg %zu: x=%.4f y=%.4f z=%.4f", 
                          request->leg_number[i], leg_dest_pos.x, leg_dest_pos.y, leg_dest_pos.z);
-            return;
+            // Fallback: keep current joints so downstream can still move other legs (useful for testing).
+            response->target_joints.push_back(request->current_joints[i]);
+        }
+    }
+
+    if (all_ok) {
+        response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND;
+    } else {
+        if (allow_partial_ik_) {
+            response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND;
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                                 "Partial IK: some legs failed, returning best-effort joints (allow_partial_ik=true)");
+        } else {
+            response->error_codes = crab_msgs::srv::GetLegIKSolver::Response::IK_NOT_FOUND;
         }
     }
 }

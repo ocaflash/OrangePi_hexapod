@@ -23,6 +23,7 @@ public:
 private:
     std::string root_name_, tip_name_;
     double joint_lower_limit_, joint_upper_limit_;
+    bool allow_partial_ik_;
     static constexpr unsigned int num_joints_ = NUM_JOINTS;
     static constexpr unsigned int num_legs_ = NUM_LEGS;
 

@@ -65,12 +65,18 @@ def generate_launch_description():
         default_value=joy_dev_default,
         description='Joystick device path for joy_node (e.g. /dev/input/js0)'
     )
+    allow_partial_ik_arg = DeclareLaunchArgument(
+        'allow_partial_ik',
+        default_value='false',
+        description='Allow best-effort IK (do not block all joints if a leg IK fails) - useful for testing'
+    )
 
     return LaunchDescription([
         port_name_arg,
         use_primitives_arg,
         imu_autostart_arg,
         joy_dev_arg,
+        allow_partial_ik_arg,
         
         # Robot State Publisher (публикует URDF)
         Node(
@@ -84,7 +90,10 @@ def generate_launch_description():
             package='crab_leg_kinematics',
             executable='leg_ik_service',
             name='crab_leg_kinematics',
-            parameters=[{'robot_description': robot_description}],
+            parameters=[
+                {'robot_description': robot_description},
+                {'allow_partial_ik': LaunchConfiguration('allow_partial_ik')},
+            ],
         ),
         
         # Body Kinematics
