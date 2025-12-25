@@ -1,6 +1,7 @@
 #include "teleop_joy.hpp"
 #include <cmath>
 #include <algorithm>
+#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -10,6 +11,15 @@ constexpr float DEADZONE = 0.15f;
 // Apply deadzone to axis value
 inline float applyDeadzone(float value) {
     return (std::abs(value) < DEADZONE) ? 0.0f : value;
+}
+
+// Safe access helpers for varying controller mappings
+static inline int getButton(const sensor_msgs::msg::Joy::SharedPtr& joy, size_t idx) {
+    return (joy && joy->buttons.size() > idx) ? joy->buttons[idx] : 0;
+}
+
+static inline float getAxis(const sensor_msgs::msg::Joy::SharedPtr& joy, size_t idx) {
+    return (joy && joy->axes.size() > idx) ? joy->axes[idx] : 0.0f;
 }
 
 TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(false), 
@@ -33,6 +43,8 @@ TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(fals
     gait_cmd_pub_ = this->create_publisher<crab_msgs::msg::GaitCommand>("/teleop/gait_control", 1);
 
     RCLCPP_INFO(this->get_logger(), "Starting DS4 teleop converter...");
+    RCLCPP_INFO(this->get_logger(), "Controls: OPTIONS=stand/sit, Left stick=walk, Right stick=turn/scale");
+    RCLCPP_INFO(this->get_logger(), "Hold L1=body RPY, hold R1=body XYZ offsets, hold Square=gyro control");
     RCLCPP_INFO(this->get_logger(), "Hold Square button and tilt controller for gyro control");
 }
 
@@ -52,7 +64,19 @@ void TeleopJoy::ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu) {
 }
 
 void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
-    if (joy->buttons[button_start_] && !imu_flag_) {
+    const int btn_start = getButton(joy, button_start_);
+    const int btn_imu = getButton(joy, button_imu_);
+    const int btn_gait_switch = getButton(joy, button_gait_switch_);
+    const int btn_l1 = getButton(joy, button_left_shift_);
+    const int btn_r1 = getButton(joy, button_right_shift_);
+    const int btn_gyro = getButton(joy, button_gyro_control_);
+
+    const float ax_lx = getAxis(joy, axis_body_roll_);
+    const float ax_ly = getAxis(joy, axis_body_pitch_);
+    const float ax_rx = getAxis(joy, axis_body_yaw_);
+    const float ax_ry = getAxis(joy, axis_body_z_off_);
+
+    if (btn_start && !imu_flag_) {
         if (!start_flag_) {
             start_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::STAND_UP_CMD;
@@ -65,7 +89,7 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         std::this_thread::sleep_for(1s);
     }
 
-    if (joy->buttons[button_imu_] && !start_flag_) {
+    if (btn_imu && !start_flag_) {
         if (!imu_flag_) {
             imu_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::IMU_START_CMD;
@@ -78,7 +102,7 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         std::this_thread::sleep_for(1s);
     }
 
-    if (joy->buttons[button_gait_switch_]) {
+    if (btn_gait_switch) {
         if (!gait_flag_) {
             gait_flag_ = true;
             gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
@@ -92,34 +116,34 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
 
     if (start_flag_) {
         // RPY Signal via sticks (L1 held)
-        if (joy->buttons[button_left_shift_]) {
-            body_state_.roll = 0.25 * joy->axes[axis_body_roll_];
-            body_state_.pitch = -0.25 * joy->axes[axis_body_pitch_];
-            body_state_.yaw = -0.28 * joy->axes[axis_body_yaw_];
+        if (btn_l1) {
+            body_state_.roll = 0.25 * ax_lx;
+            body_state_.pitch = -0.25 * ax_ly;
+            body_state_.yaw = -0.28 * ax_rx;
             move_body_pub_->publish(body_state_);
         }
         // RPY Signal via controller gyroscope (Square held)
         // Gyro data comes from ds4_imu_publisher via /ds4/imu topic
-        gyro_button_pressed_ = joy->buttons[button_gyro_control_];
+        gyro_button_pressed_ = (btn_gyro != 0);
         // Note: actual gyro control happens in ds4ImuCallback when button is pressed
         // Offset Signal (R1 held)
-        if (joy->buttons[button_right_shift_]) {
-            body_state_.y = -0.05 * joy->axes[axis_body_y_off_];
-            body_state_.x = -0.05 * joy->axes[axis_body_x_off_];
-            if (joy->axes[axis_body_z_off_] < 0) {
-                body_state_.z = -0.03 * joy->axes[axis_body_z_off_] - z_;
+        if (btn_r1) {
+            body_state_.y = -0.05 * ax_lx;
+            body_state_.x = -0.05 * ax_ly;
+            if (ax_ry < 0) {
+                body_state_.z = -0.03 * ax_ry - z_;
             } else {
-                body_state_.z = -0.1 * joy->axes[axis_body_z_off_] - z_;
+                body_state_.z = -0.1 * ax_ry - z_;
             }
             move_body_pub_->publish(body_state_);
         }
         // Gait Signals
-        if (!joy->buttons[button_left_shift_] && !joy->buttons[button_right_shift_]) {
+        if (!btn_l1 && !btn_r1) {
             // Apply deadzone to all axes
-            float fi_x = applyDeadzone(joy->axes[axis_fi_x_]);
-            float fi_y = applyDeadzone(joy->axes[axis_fi_y_]);
-            float alpha = applyDeadzone(joy->axes[axis_alpha_]);
-            float scale = applyDeadzone(joy->axes[axis_scale_]);
+            float fi_x = applyDeadzone(getAxis(joy, axis_fi_x_));
+            float fi_y = applyDeadzone(getAxis(joy, axis_fi_y_));
+            float alpha = applyDeadzone(getAxis(joy, axis_alpha_));
+            float scale = applyDeadzone(getAxis(joy, axis_scale_));
 
             if (fi_x != 0 || fi_y != 0) {
                 if (!gait_flag_) {
@@ -153,7 +177,7 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         bool l2_pressed = (joy->axes.size() > DS4_AXIS_L2) && (joy->axes[DS4_AXIS_L2] < 0.5);
         if (l2_pressed && !imu_flag_) {
             body_state_.z = -0.016;  // Seated position
-            body_state_.leg_radius = 0.06 * joy->axes[axis_body_yaw_] + 0.11;
+            body_state_.leg_radius = 0.06 * ax_rx + 0.11;
             move_body_pub_->publish(body_state_);
             RCLCPP_DEBUG(this->get_logger(), "L2 pressed: leg_radius=%.3f", body_state_.leg_radius);
         }
