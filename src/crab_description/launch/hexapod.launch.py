@@ -52,7 +52,7 @@ def generate_launch_description():
     )
     maestro_protocol_arg = DeclareLaunchArgument(
         'maestro_protocol',
-        default_value=os.environ.get('MAESTRO_PROTOCOL', 'compact'),
+        default_value=os.environ.get('MAESTRO_PROTOCOL', 'mini_ssc'),
         description='Maestro serial protocol: compact or mini_ssc'
     )
     imu_autostart_arg = DeclareLaunchArgument(

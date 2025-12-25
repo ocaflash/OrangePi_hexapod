@@ -23,9 +23,9 @@ public:
         this->declare_parameter<int>("baud_rate", 115200);
         this->declare_parameter<double>("max_speed", 5.0);  // max change per update
         // Maestro serial protocol:
+        // - "mini_ssc": MiniSSC protocol (0xFF ...) expects normalized 0..254. (default for backwards-compat)
         // - "compact": Pololu Maestro Compact Protocol (0x84 ...) expects target in quarter-microseconds.
-        // - "mini_ssc": MiniSSC protocol (0xFF ...) expects normalized 0..254.
-        this->declare_parameter<std::string>("protocol", "compact");
+        this->declare_parameter<std::string>("protocol", "mini_ssc");
         // Only used for protocol=compact (quarter-microseconds, e.g. 4000..8000 with center 6000)
         this->declare_parameter<int>("target_min", 4000);
         this->declare_parameter<int>("target_max", 8000);
