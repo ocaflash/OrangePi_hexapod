@@ -48,6 +48,12 @@ void Gait::setAlpha(double alpha) {
 }
 
 void Gait::setPath() {
+    // IMPORTANT: trajectories hold references to paths.
+    // We must destroy old trajectories BEFORE replacing paths, otherwise KDL can crash
+    // with invalid free/double free when old trajectory destructors touch freed paths.
+    trajectory_support_.reset();
+    trajectory_transfer_.reset();
+
     // KDL Path_* classes take a RotationalInterpolation*; in practice they manage (delete) it.
     // Do NOT pass a pointer to a stack/member object here, and do not share one instance
     // across multiple paths (can cause invalid free / double free).
