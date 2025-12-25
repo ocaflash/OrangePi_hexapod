@@ -99,6 +99,12 @@ def generate_launch_description():
             parameters=[
                 {'robot_description': robot_description},
                 {'allow_partial_ik': LaunchConfiguration('allow_partial_ik')},
+                # Keep IK joint limits consistent with URDF / config
+                {'joint_lower_limit': geometry_config['joint_limits']['lower']},
+                {'joint_upper_limit': geometry_config['joint_limits']['upper']},
+                # IK solver settings (parameter names in leg_ik_service are camelCase)
+                {'maxIterations': geometry_config['ik_solver']['max_iterations']},
+                {'epsilon': geometry_config['ik_solver']['epsilon']},
             ],
         ),
         
