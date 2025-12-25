@@ -27,10 +27,12 @@ TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(fals
                          ds4_gyro_x_(0), ds4_gyro_y_(0), ds4_gyro_z_(0) {
     this->declare_parameter<double>("clearance", 0.045);
     this->declare_parameter<double>("seat_height", 0.016);
+    this->declare_parameter<double>("default_leg_radius", 0.11);
     z_ = this->get_parameter("clearance").as_double();
     seat_height_ = this->get_parameter("seat_height").as_double();
+    default_leg_radius_ = this->get_parameter("default_leg_radius").as_double();
 
-    body_state_.leg_radius = 0.11;
+    body_state_.leg_radius = default_leg_radius_;
     body_state_.z = -z_;
 
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
@@ -90,7 +92,8 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             body_cmd_pub_->publish(body_command_);
             // Ensure teleop body_state does not keep "seated" Z / leg_radius after standing up
             body_state_.z = -z_;
-            body_state_.leg_radius = std::clamp(body_state_.leg_radius, 0.10, 0.14);
+            // IMPORTANT: use nominal leg radius for standing/walking to keep IK reachable
+            body_state_.leg_radius = default_leg_radius_;
             move_body_pub_->publish(body_state_);
         } else {
             start_flag_ = false;
@@ -207,7 +210,8 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
 
         if (l2_pressed && !imu_flag_) {
             body_state_.z = -seat_height_;  // Seated position
-            body_state_.leg_radius = std::clamp(0.06 * ax_rx + 0.11, 0.10, 0.14);
+            // Keep radius changes conservative to avoid IK failures during low Z
+            body_state_.leg_radius = std::clamp(0.04 * ax_rx + default_leg_radius_, 0.10, 0.12);
             // Keep seated posture stable (avoid confusing stale RPY output)
             body_state_.roll = 0.0;
             body_state_.pitch = 0.0;

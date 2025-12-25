@@ -57,6 +57,7 @@ private:
 
     double z_;
     double seat_height_;
+    double default_leg_radius_;
     bool start_flag_;
     bool gait_flag_;
     bool imu_flag_;
