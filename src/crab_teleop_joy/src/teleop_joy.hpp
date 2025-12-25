@@ -68,6 +68,9 @@ private:
     int prev_btn_start_ = 0;
     int prev_btn_imu_ = 0;
     int prev_btn_gait_switch_ = 0;
+    rclcpp::Time last_start_toggle_time_{0, 0, RCL_ROS_TIME};
+    rclcpp::Time last_imu_toggle_time_{0, 0, RCL_ROS_TIME};
+    rclcpp::Time last_gait_toggle_time_{0, 0, RCL_ROS_TIME};
 
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy);
     void ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu);

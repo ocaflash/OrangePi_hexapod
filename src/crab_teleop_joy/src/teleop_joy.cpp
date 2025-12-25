@@ -80,12 +80,23 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
     const float ax_rx = getAxis(joy, axis_body_yaw_);
     const float ax_ry = getAxis(joy, axis_body_z_off_);
 
-    // Rising-edge detection (act once per press, not while held)
+    // Rising-edge detection (act once per press, not while held) + time debounce
     const bool start_pressed = (btn_start != 0) && (prev_btn_start_ == 0);
     const bool imu_pressed = (btn_imu != 0) && (prev_btn_imu_ == 0);
     const bool gait_switch_pressed = (btn_gait_switch != 0) && (prev_btn_gait_switch_ == 0);
+    const auto now = this->now();
+    const auto debounce = rclcpp::Duration::from_seconds(0.35);
 
-    if (start_pressed && !imu_flag_) {
+    if (start_pressed && !imu_flag_ && (now - last_start_toggle_time_) > debounce) {
+        last_start_toggle_time_ = now;
+
+        // IMPORTANT: OPTIONS should NEVER start walking. Stop gait explicitly on mode change.
+        gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
+        gait_command_.scale = 0.0;
+        gait_command_.alpha = 0.0;
+        gait_command_.fi = 0.0;
+        gait_cmd_pub_->publish(gait_command_);
+
         if (!start_flag_) {
             start_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::STAND_UP_CMD;
@@ -108,7 +119,8 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         }
     }
 
-    if (imu_pressed && !start_flag_) {
+    if (imu_pressed && !start_flag_ && (now - last_imu_toggle_time_) > debounce) {
+        last_imu_toggle_time_ = now;
         if (!imu_flag_) {
             imu_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::IMU_START_CMD;
@@ -120,7 +132,8 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         }
     }
 
-    if (gait_switch_pressed) {
+    if (gait_switch_pressed && (now - last_gait_toggle_time_) > debounce) {
+        last_gait_toggle_time_ = now;
         if (!gait_flag_) {
             gait_flag_ = true;
             gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
@@ -162,6 +175,8 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             float alpha = applyDeadzone(getAxis(joy, axis_alpha_));
             float scale = applyDeadzone(getAxis(joy, axis_scale_));
 
+            // Start walking ONLY from left stick (fi_x/fi_y). This prevents "walking on OPTIONS"
+            // due to right-stick drift.
             if (fi_x != 0 || fi_y != 0) {
                 if (!gait_flag_) {
                     gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
@@ -173,22 +188,11 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
                 gait_command_.fi = std::atan2(fi_x, fi_y);
                 gait_command_.scale = std::pow(a + b, 0.5) > 1 ? 1 : std::pow(a + b, 0.5);
                 gait_command_.alpha = 0;
-            } else if (alpha != 0 || scale != 0) {
-                if (!gait_flag_) {
-                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
-                } else {
-                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNTRIPOD;
-                }
-                gait_command_.fi = (scale > 0) ? 0 : 3.14;
-                gait_command_.scale = std::abs(scale);
-                // Allow rotation-in-place with right stick X even if right stick Y (scale) is neutral.
-                if (gait_command_.scale < 0.05 && alpha != 0.0f) {
-                    gait_command_.scale = 0.20;
-                }
-                gait_command_.alpha = ((alpha > 0) ? 1 : -1) * 0.06 * (1 - gait_command_.scale) + 0.11 * alpha;
             } else {
                 // All sticks in neutral - PAUSE
                 gait_command_.cmd = crab_msgs::msg::GaitCommand::PAUSE;
+                gait_command_.scale = 0.0;
+                gait_command_.alpha = 0.0;
             }
             gait_cmd_pub_->publish(gait_command_);
         }
