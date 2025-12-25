@@ -78,7 +78,12 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
     const float ax_rx = getAxis(joy, axis_body_yaw_);
     const float ax_ry = getAxis(joy, axis_body_z_off_);
 
-    if (btn_start && !imu_flag_) {
+    // Rising-edge detection (act once per press, not while held)
+    const bool start_pressed = (btn_start != 0) && (prev_btn_start_ == 0);
+    const bool imu_pressed = (btn_imu != 0) && (prev_btn_imu_ == 0);
+    const bool gait_switch_pressed = (btn_gait_switch != 0) && (prev_btn_gait_switch_ == 0);
+
+    if (start_pressed && !imu_flag_) {
         if (!start_flag_) {
             start_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::STAND_UP_CMD;
@@ -98,10 +103,9 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             body_state_.yaw = 0.0;
             move_body_pub_->publish(body_state_);
         }
-        std::this_thread::sleep_for(1s);
     }
 
-    if (btn_imu && !start_flag_) {
+    if (imu_pressed && !start_flag_) {
         if (!imu_flag_) {
             imu_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::IMU_START_CMD;
@@ -111,10 +115,9 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             body_command_.cmd = crab_msgs::msg::BodyCommand::IMU_STOP_CMD;
             body_cmd_pub_->publish(body_command_);
         }
-        std::this_thread::sleep_for(1s);
     }
 
-    if (btn_gait_switch) {
+    if (gait_switch_pressed) {
         if (!gait_flag_) {
             gait_flag_ = true;
             gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
@@ -123,7 +126,6 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
         }
         gait_cmd_pub_->publish(gait_command_);
-        std::this_thread::sleep_for(500ms);
     }
 
     if (start_flag_) {
@@ -215,6 +217,11 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             gait_cmd_pub_->publish(gait_command_);
         }
     }
+
+    // Update previous button states at end of callback
+    prev_btn_start_ = btn_start;
+    prev_btn_imu_ = btn_imu;
+    prev_btn_gait_switch_ = btn_gait_switch;
 }
 
 int main(int argc, char **argv) {

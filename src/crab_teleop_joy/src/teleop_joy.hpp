@@ -63,6 +63,11 @@ private:
     bool gyro_button_pressed_;
     double ds4_gyro_x_, ds4_gyro_y_, ds4_gyro_z_;
 
+    // Debounce / edge-detection for buttons (avoid toggling while held)
+    int prev_btn_start_ = 0;
+    int prev_btn_imu_ = 0;
+    int prev_btn_gait_switch_ = 0;
+
     void joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy);
     void ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu);
 
