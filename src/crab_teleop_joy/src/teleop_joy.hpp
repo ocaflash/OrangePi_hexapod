@@ -56,6 +56,7 @@ private:
     rclcpp::Publisher<crab_msgs::msg::GaitCommand>::SharedPtr gait_cmd_pub_;
 
     double z_;
+    double seat_height_;
     bool start_flag_;
     bool gait_flag_;
     bool imu_flag_;
