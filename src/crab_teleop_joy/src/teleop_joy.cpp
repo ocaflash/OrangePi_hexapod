@@ -105,6 +105,13 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             body_state_.z = -z_;
             // IMPORTANT: use nominal leg radius for standing/walking to keep IK reachable
             body_state_.leg_radius = default_leg_radius_;
+            // Reset offsets/orientation on mode switch to avoid stale RPY/offsets affecting IK
+            body_state_.x = 0.0;
+            body_state_.y = 0.0;
+            body_state_.roll = 0.0;
+            body_state_.pitch = 0.0;
+            body_state_.yaw = 0.0;
+            gyro_button_pressed_ = false;
             move_body_pub_->publish(body_state_);
         } else {
             start_flag_ = false;

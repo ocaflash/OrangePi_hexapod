@@ -105,7 +105,7 @@ def generate_launch_description():
             name='crab_leg_kinematics',
             parameters=[
                 {'robot_description': robot_description},
-                {'allow_partial_ik': LaunchConfiguration('allow_partial_ik')},
+                {'allow_partial_ik': ParameterValue(LaunchConfiguration('allow_partial_ik'), value_type=bool)},
                 # Keep IK joint limits consistent with URDF / config
                 {'joint_lower_limit': geometry_config['joint_limits']['lower']},
                 {'joint_upper_limit': geometry_config['joint_limits']['upper']},
