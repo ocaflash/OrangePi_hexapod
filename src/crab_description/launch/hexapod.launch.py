@@ -2,6 +2,7 @@ import os
 import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 from launch_ros.parameter_descriptions import ParameterValue
@@ -75,6 +76,11 @@ def generate_launch_description():
         default_value='false',
         description='Allow best-effort IK (do not block all joints if a leg IK fails) - useful for testing'
     )
+    enable_gait_arg = DeclareLaunchArgument(
+        'enable_gait',
+        default_value='true',
+        description='Enable gait_kinematics node (disable to debug stand/servos without walking)'
+    )
 
     return LaunchDescription([
         port_name_arg,
@@ -83,6 +89,7 @@ def generate_launch_description():
         imu_autostart_arg,
         joy_dev_arg,
         allow_partial_ik_arg,
+        enable_gait_arg,
         
         # Robot State Publisher (публикует URDF)
         Node(
@@ -125,6 +132,7 @@ def generate_launch_description():
         Node(
             package='crab_gait',
             executable='gait_kinematics',
+            condition=IfCondition(LaunchConfiguration('enable_gait')),
             parameters=[
                 {'robot_description': robot_description},
                 {'leg_radius': geometry_config['workspace']['leg_radius']},
