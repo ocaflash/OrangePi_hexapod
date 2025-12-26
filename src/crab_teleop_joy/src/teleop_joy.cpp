@@ -205,8 +205,12 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         }
     } else {
         // Leg radius adjustment when seated (L2 trigger pressed - use axis, not button)
-        // L2 axis: 1.0 = not pressed, -1.0 = fully pressed
-        bool l2_pressed = (joy->axes.size() > DS4_AXIS_L2) && (joy->axes[DS4_AXIS_L2] < 0.5);
+        // L2 axis varies by driver. Common cases:
+        // - [-1..1]: 0.0 ~ not pressed, -1.0 ~ fully pressed
+        // - [0..1]:  0.0 ~ not pressed,  1.0 ~ fully pressed
+        // We treat "pressed" only when it is clearly pressed, to avoid always-on publishing.
+        const float l2_axis = getAxis(joy, DS4_AXIS_L2);
+        const bool l2_pressed = (l2_axis < -0.5f) || (l2_axis > 0.8f);
 
         // Helpful hint: sticks won't walk while seated (start_flag_ == false)
         const bool sticks_moved =
@@ -227,6 +231,7 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             body_state_.roll = 0.0;
             body_state_.pitch = 0.0;
             body_state_.yaw = 0.0;
+            // Throttle to reduce servo jitter if joystick is noisy
             move_body_pub_->publish(body_state_);
             RCLCPP_DEBUG(this->get_logger(), "L2 pressed: leg_radius=%.3f", body_state_.leg_radius);
         }
