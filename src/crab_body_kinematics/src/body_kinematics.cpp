@@ -68,7 +68,17 @@ bool BodyKinematics::init() {
     }
     RCLCPP_INFO(this->get_logger(), "Leg IK service available");
     
-    calculateKinematics(&bs_);
+    // Initialize to a reachable pose. If seat_height is too "high" (close to 0),
+    // IK may fail. In that case, fall back toward standing clearance.
+    if (!calculateKinematics(&bs_)) {
+        RCLCPP_WARN(this->get_logger(),
+                    "Initial IK failed at seat_height=%.4f (z=%.4f). Falling back to clearance=%.4f (z=%.4f).",
+                    seat_height_, bs_.z, z_, -z_);
+        bs_.z = -z_;
+        if (!calculateKinematics(&bs_)) {
+            RCLCPP_ERROR(this->get_logger(), "Initial IK failed even at clearance. Check geometry/limits.");
+        }
+    }
     RCLCPP_INFO(this->get_logger(), "Ready to receive teleop messages...");
 
     return true;
@@ -135,11 +145,7 @@ bool BodyKinematics::calculateKinematics(crab_msgs::msg::BodyState* body_ptr) {
         final_vector_[i] = (rotation_ * tibia_foot_frame_.p) + offset_vector_ + rotate_correction_;
     }
 
-    if (!callService(final_vector_)) {
-        return false;
-    }
-
-    return true;
+    return callService(final_vector_);
 }
 
 bool BodyKinematics::callService(KDL::Vector* vector) {
@@ -156,28 +162,36 @@ bool BodyKinematics::callService(KDL::Vector* vector) {
         request->current_joints.push_back(legs_.joints_state[i]);
     }
 
-    // Check service availability (non-blocking)
-    if (!client_->service_is_ready()) {
-        RCLCPP_WARN(this->get_logger(), "Service not available");
+    if (!client_->wait_for_service(100ms)) {
+        RCLCPP_WARN(this->get_logger(), "Leg IK service not available");
         return false;
     }
 
-    // Send async request with callback
-    auto future = client_->async_send_request(request,
-        [this](rclcpp::Client<crab_msgs::srv::GetLegIKSolver>::SharedFuture response_future) {
-            auto response = response_future.get();
-            if (response->error_codes == crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
-                for (size_t i = 0; i < num_legs_; i++) {
-                    for (size_t j = 0; j < num_joints_; j++) {
-                        legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
-                    }
-                }
-                joints_pub_->publish(legs_);
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "An IK solution could not be found");
-            }
-        });
+    auto future = client_->async_send_request(request);
+    if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), future, 200ms) !=
+        rclcpp::FutureReturnCode::SUCCESS) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to call leg IK service (timeout)");
+        return false;
+    }
 
+    const auto response = future.get();
+    if (response->error_codes != crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
+        RCLCPP_ERROR(this->get_logger(), "An IK solution could not be found");
+        return false;
+    }
+
+    if (response->target_joints.size() != num_legs_) {
+        RCLCPP_ERROR(this->get_logger(), "IK response size mismatch: %zu (expected %u)",
+                     response->target_joints.size(), num_legs_);
+        return false;
+    }
+
+    for (size_t i = 0; i < num_legs_; i++) {
+        for (size_t j = 0; j < num_joints_; j++) {
+            legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
+        }
+    }
+    joints_pub_->publish(legs_);
     return true;
 }
 
@@ -211,7 +225,10 @@ void BodyKinematics::motionTimerCallback() {
     if (stand_up_active_) {
         if (bs_.z >= -z_) {
             bs_.z -= stand_step_;
-            calculateKinematics(&bs_);
+            if (!calculateKinematics(&bs_)) {
+                stand_up_active_ = false;
+                RCLCPP_ERROR(this->get_logger(), "Stand up IK failed at z=%.4f; stopping motion", bs_.z);
+            }
         } else {
             stand_up_active_ = false;
             RCLCPP_INFO(this->get_logger(), "Stand up complete (z=%.4f)", bs_.z);
@@ -220,7 +237,10 @@ void BodyKinematics::motionTimerCallback() {
     if (seat_down_active_) {
         if (bs_.z <= -seat_height_) {
             bs_.z += stand_step_;
-            calculateKinematics(&bs_);
+            if (!calculateKinematics(&bs_)) {
+                seat_down_active_ = false;
+                RCLCPP_ERROR(this->get_logger(), "Seat down IK failed at z=%.4f; stopping motion", bs_.z);
+            }
         } else {
             seat_down_active_ = false;
             RCLCPP_INFO(this->get_logger(), "Seat down complete (z=%.4f)", bs_.z);
