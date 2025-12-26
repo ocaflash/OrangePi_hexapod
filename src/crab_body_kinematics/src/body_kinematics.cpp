@@ -68,17 +68,10 @@ bool BodyKinematics::init() {
     }
     RCLCPP_INFO(this->get_logger(), "Leg IK service available");
     
-    // Initialize to a reachable pose. If seat_height is too "high" (close to 0),
-    // IK may fail. In that case, fall back toward standing clearance.
-    if (!calculateKinematics(&bs_)) {
-        RCLCPP_WARN(this->get_logger(),
-                    "Initial IK failed at seat_height=%.4f (z=%.4f). Falling back to clearance=%.4f (z=%.4f).",
-                    seat_height_, bs_.z, z_, -z_);
-        bs_.z = -z_;
-        if (!calculateKinematics(&bs_)) {
-            RCLCPP_ERROR(this->get_logger(), "Initial IK failed even at clearance. Check geometry/limits.");
-        }
-    }
+    // Do not block on IK here: this node will be added to an executor after init(),
+    // and blocking service calls using spin_until_future_complete() would crash.
+    // The first joint publication will happen once the executor starts spinning.
+    calculateKinematics(&bs_);
     RCLCPP_INFO(this->get_logger(), "Ready to receive teleop messages...");
 
     return true;
@@ -149,6 +142,12 @@ bool BodyKinematics::calculateKinematics(crab_msgs::msg::BodyState* body_ptr) {
 }
 
 bool BodyKinematics::callService(KDL::Vector* vector) {
+    // Avoid flooding the IK service; keep at most one request in flight.
+    bool expected = false;
+    if (!ik_in_flight_.compare_exchange_strong(expected, true)) {
+        return true;  // previous request still in flight
+    }
+
     auto request = std::make_shared<crab_msgs::srv::GetLegIKSolver::Request>();
     
     // Creating message to request
@@ -162,37 +161,36 @@ bool BodyKinematics::callService(KDL::Vector* vector) {
         request->current_joints.push_back(legs_.joints_state[i]);
     }
 
-    if (!client_->wait_for_service(100ms)) {
-        RCLCPP_WARN(this->get_logger(), "Leg IK service not available");
+    if (!client_->service_is_ready()) {
+        ik_in_flight_.store(false);
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Leg IK service not ready");
         return false;
     }
 
-    auto future = client_->async_send_request(request);
-    if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), future, 200ms) !=
-        rclcpp::FutureReturnCode::SUCCESS) {
-        RCLCPP_ERROR(this->get_logger(), "Failed to call leg IK service (timeout)");
-        return false;
-    }
+    (void)client_->async_send_request(
+        request,
+        [this](rclcpp::Client<crab_msgs::srv::GetLegIKSolver>::SharedFuture response_future) {
+            ik_in_flight_.store(false);
+            const auto response = response_future.get();
+            if (response->error_codes != crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND ||
+                response->target_joints.size() != num_legs_) {
+                // Stop motions on IK failure to avoid runaway Z updates
+                stand_up_active_ = false;
+                seat_down_active_ = false;
+                RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 500,
+                                     "An IK solution could not be found (stopping motion)");
+                return;
+            }
 
-    const auto response = future.get();
-    if (response->error_codes != crab_msgs::srv::GetLegIKSolver::Response::IK_FOUND) {
-        RCLCPP_ERROR(this->get_logger(), "An IK solution could not be found");
-        return false;
-    }
+            for (size_t i = 0; i < num_legs_; i++) {
+                for (size_t j = 0; j < num_joints_; j++) {
+                    legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
+                }
+            }
+            joints_pub_->publish(legs_);
+        });
 
-    if (response->target_joints.size() != num_legs_) {
-        RCLCPP_ERROR(this->get_logger(), "IK response size mismatch: %zu (expected %u)",
-                     response->target_joints.size(), num_legs_);
-        return false;
-    }
-
-    for (size_t i = 0; i < num_legs_; i++) {
-        for (size_t j = 0; j < num_joints_; j++) {
-            legs_.joints_state[i].joint[j] = response->target_joints[i].joint[j];
-        }
-    }
-    joints_pub_->publish(legs_);
-    return true;
+    return true;  // request accepted
 }
 
 void BodyKinematics::teleopBodyMove(const crab_msgs::msg::BodyState::SharedPtr body_state) {

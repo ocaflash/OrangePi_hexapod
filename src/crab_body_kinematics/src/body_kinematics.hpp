@@ -8,6 +8,7 @@
 #include <crab_msgs/msg/legs_joints_state.hpp>
 #include <crab_msgs/msg/body_state.hpp>
 #include <crab_msgs/msg/body_command.hpp>
+#include <atomic>
 
 #define NUM_LEGS 6
 #define NUM_JOINTS 3
@@ -41,6 +42,7 @@ private:
     
     bool stand_up_active_;
     bool seat_down_active_;
+    std::atomic<bool> ik_in_flight_{false};
 
     bool loadModel(const std::string& xml);
     bool calculateKinematics(crab_msgs::msg::BodyState* body_ptr);
