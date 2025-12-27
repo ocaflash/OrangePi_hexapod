@@ -62,20 +62,43 @@ void GaitKinematics::gaitGenerator() {
     Gait gait;
     gait.setTrapezoid(trap_low_r_, trap_high_r_, trap_h_, trap_z_, path_tolerance_, rounded_radius_);
 
-    rclcpp::Rate rate(50);  // Увеличено с 25 Hz для более плавного движения
+    RCLCPP_INFO(this->get_logger(), "Gait generator started. Trapezoid: low_r=%.3f high_r=%.3f h=%.3f z=%.3f",
+                trap_low_r_, trap_high_r_, trap_h_, trap_z_);
+
+    rclcpp::Rate rate(50);  // 50 Hz для плавного движения
+    int log_counter = 0;
+    
     while (rclcpp::ok()) {
         // Only run gait if scale > 0 to avoid KDL path errors
         if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNRIPPLE && gait_command_.scale > 0.01) {
+            if (log_counter % 50 == 0) {
+                RCLCPP_INFO(this->get_logger(), "RUNRIPPLE: fi=%.2f scale=%.2f alpha=%.2f", 
+                            gait_command_.fi, gait_command_.scale, gait_command_.alpha);
+            }
             final_vector = gait.RunRipple(frames_.begin(), gait_command_.fi, gait_command_.scale,
                                           gait_command_.alpha, d_ripple_);
             if (callService(final_vector)) {
                 joints_pub_->publish(legs_);
+                if (log_counter % 50 == 0) {
+                    RCLCPP_INFO(this->get_logger(), "Published joints: leg0=[%.3f,%.3f,%.3f]",
+                                legs_.joints_state[0].joint[0], legs_.joints_state[0].joint[1], 
+                                legs_.joints_state[0].joint[2]);
+                }
             }
         } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNTRIPOD && gait_command_.scale > 0.01) {
+            if (log_counter % 50 == 0) {
+                RCLCPP_INFO(this->get_logger(), "RUNTRIPOD: fi=%.2f scale=%.2f alpha=%.2f", 
+                            gait_command_.fi, gait_command_.scale, gait_command_.alpha);
+            }
             final_vector = gait.RunTripod(frames_.begin(), gait_command_.fi, gait_command_.scale,
                                           gait_command_.alpha, d_tripod_);
             if (callService(final_vector)) {
                 joints_pub_->publish(legs_);
+                if (log_counter % 50 == 0) {
+                    RCLCPP_INFO(this->get_logger(), "Published joints: leg0=[%.3f,%.3f,%.3f]",
+                                legs_.joints_state[0].joint[0], legs_.joints_state[0].joint[1], 
+                                legs_.joints_state[0].joint[2]);
+                }
             }
         } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::PAUSE) {
             gait.Pause();
@@ -85,6 +108,7 @@ void GaitKinematics::gaitGenerator() {
         }
         rclcpp::spin_some(this->get_node_base_interface());
         rate.sleep();
+        log_counter++;
     }
 }
 

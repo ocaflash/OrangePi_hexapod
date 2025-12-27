@@ -39,11 +39,10 @@ private:
     std::queue<int> legs_queue_;
     bool run_state_, pause_state_;
     int phase_;
-    double passed_sec_, begin_sec_, cycle_time_;
+    double passed_sec_, begin_sec_;
     double low_rad_, high_rad_, height_, z_body_;
     double path_tolerance_, rounded_radius_;
     KDL::Vector final_vector_[NUM_LEGS];
-    // NOTE: Trajectories reference paths, so they must be destroyed before the paths.
     std::unique_ptr<KDL::Trajectory_Segment> trajectory_transfer_;
     std::unique_ptr<KDL::Trajectory_Segment> trajectory_support_;
 };

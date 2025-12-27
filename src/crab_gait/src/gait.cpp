@@ -3,20 +3,7 @@
 #include <cmath>
 #include <kdl/velocityprofile_spline.hpp>
 
-namespace {
-double clamp_time(const KDL::Trajectory_Segment* trajectory, double t) {
-    if (!trajectory) {
-        return t;
-    }
-    const double duration = trajectory->Duration();
-    if (duration <= 0.0) {
-        return 0.0;
-    }
-    return std::min(std::max(0.0, t), duration);
-}
-}  // namespace
-
-Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0), cycle_time_(0) {
+Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0) {
     legs_queue_.push(5);
     legs_queue_.push(0);
     legs_queue_.push(4);
@@ -60,7 +47,6 @@ void Gait::setTrajectory(double sup_path_duration, double tran_path_duration) {
     trajectory_transfer_.reset();
 
     // Allocate everything on heap and hand pointers to Trajectory_Segment.
-    // KDL trajectory/path classes are known to manage (delete) the objects passed in.
     auto* rot_support = new KDL::RotationalInterpolation_SingleAxis();
     auto* rot_transfer = new KDL::RotationalInterpolation_SingleAxis();
 
@@ -82,10 +68,6 @@ void Gait::setTrajectory(double sup_path_duration, double tran_path_duration) {
 }
 
 KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration) {
-    // Tripod gait: 3 ноги в воздухе, 3 на земле
-    // Группа A: R1(0), L2(4), R3(2)
-    // Группа B: L1(3), R2(1), L3(5)
-    
     setFi(fi);
     setAlpha(alpha);
     setPath();
@@ -107,28 +89,21 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
 
     passed_sec_ = now_sec - begin_sec_;
     
-    // Группы ног для tripod gait
-    static const int group_a[3] = {0, 4, 2};  // R1, L2, R3
-    static const int group_b[3] = {3, 1, 5};  // L1, R2, L3
+    // Clamp passed_sec_ to trajectory duration
+    double t_transfer = std::min(std::max(0.0, passed_sec_), trajectory_transfer_->Duration());
+    double t_support = std::min(std::max(0.0, passed_sec_), trajectory_support_->Duration());
     
-    // Группа в фазе переноса (transfer)
-    const int* transfer_group = (phase_ == 0) ? group_a : group_b;
-    const int* support_group = (phase_ == 0) ? group_b : group_a;
-    
-    for (int i = 0; i < 3; i++) {
-        int leg_idx = transfer_group[i];
-        frame = trajectory_transfer_->Pos(clamp_time(trajectory_transfer_.get(), passed_sec_));
+    for (int i = phase_; i < num_legs_; i += 2) {
+        frame = trajectory_transfer_->Pos(t_transfer);
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
-        final_vector_[leg_idx] = frame.M * (*(vector_iter + leg_idx)).p + frame.p;
+        final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
     }
-    
-    for (int i = 0; i < 3; i++) {
-        int leg_idx = support_group[i];
-        frame = trajectory_support_->Pos(clamp_time(trajectory_support_.get(), passed_sec_));
+    for (int i = !phase_; i < num_legs_; i += 2) {
+        frame = trajectory_support_->Pos(t_support);
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
-        final_vector_[leg_idx] = frame.M * (*(vector_iter + leg_idx)).p + frame.p;
+        final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
     }
 
     if (passed_sec_ >= duration - 0.02 && run_state_ == true) {
@@ -140,20 +115,11 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
 }
 
 KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration) {
-    // Ripple gait: 2 ноги в воздухе, 4 на земле в любой момент времени
-    // Период одной ноги = duration
-    // Фаза переноса (transfer) = 1/3 периода
-    // Фаза опоры (support) = 2/3 периода
-    // Смещение между ногами = 1/6 периода
-    
     double phase_offset = duration / num_legs_;
-    double transfer_duration = duration / 3.0;
-    double support_duration = duration * 2.0 / 3.0;
-    
     setFi(fi);
     setAlpha(alpha);
     setPath();
-    setTrajectory(support_duration, transfer_duration);
+    setTrajectory(duration * 2 / 3, duration / 3);
 
     auto now_sec = rclcpp::Clock().now().seconds();
 
@@ -161,7 +127,6 @@ KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter
         run_state_ = true;
         begin_sec_ = now_sec;
         passed_sec_ = 0;
-        cycle_time_ = 0;
     }
 
     if (pause_state_ == true) {
@@ -170,45 +135,31 @@ KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter
     }
 
     passed_sec_ = now_sec - begin_sec_;
-    
-    // Общее время цикла (непрерывно растёт)
-    cycle_time_ = passed_sec_;
-    
-    // Порядок ног для ripple gait: противоположные ноги с разных сторон
-    // R1(0), L3(5), R3(2), L1(3), R2(1), L2(4) - классический ripple
-    static const int leg_order[6] = {0, 5, 2, 3, 1, 4};
-    
-    for (int i = 0; i < num_legs_; i++) {
-        int leg_idx = leg_order[i];
-        
-        // Фаза для этой ноги (с учётом смещения)
-        double leg_phase = fmod(cycle_time_ + i * phase_offset, duration);
-        
-        KDL::Frame frame;
-        
-        // Определяем, в какой фазе находится нога
-        if (leg_phase < transfer_duration) {
-            // Фаза переноса (нога в воздухе)
-            double t = leg_phase;
-            frame = trajectory_transfer_->Pos(clamp_time(trajectory_transfer_.get(), t));
-        } else {
-            // Фаза опоры (нога на земле)
-            double t = leg_phase - transfer_duration;
-            frame = trajectory_support_->Pos(clamp_time(trajectory_support_.get(), t));
-        }
-        
-        frame.p.x(frame.p.data[0] * scale);
-        frame.p.y(frame.p.data[1] * scale);
-        final_vector_[leg_idx] = frame.M * (*(vector_iter + leg_idx)).p + frame.p;
-    }
 
+    getTipVector(trajectory_transfer_.get(), phase_offset, vector_iter, scale);
+    getTipVector(trajectory_transfer_.get(), 0, vector_iter, scale);
+    getTipVector(trajectory_support_.get(), 3 * phase_offset, vector_iter, scale);
+    getTipVector(trajectory_support_.get(), 2 * phase_offset, vector_iter, scale);
+    getTipVector(trajectory_support_.get(), phase_offset, vector_iter, scale);
+    getTipVector(trajectory_support_.get(), 0, vector_iter, scale);
+
+    if (passed_sec_ >= phase_offset - 0.02 && run_state_ == true) {
+        begin_sec_ = now_sec;
+        passed_sec_ = 0;
+
+        legs_queue_.push(legs_queue_.front());
+        legs_queue_.pop();
+    }
     return final_vector_;
 }
 
 void Gait::getTipVector(const KDL::Trajectory_Segment* trajectory, double phase_offset,
                         std::vector<KDL::Frame>::const_iterator vector_iter, double scale) {
     KDL::Frame frame;
-    frame = trajectory->Pos(clamp_time(trajectory, passed_sec_ + phase_offset));
+    double t = passed_sec_ + phase_offset;
+    // Clamp time to trajectory duration
+    t = std::min(std::max(0.0, t), trajectory->Duration());
+    frame = trajectory->Pos(t);
     frame.p.x(frame.p.data[0] * scale);
     frame.p.y(frame.p.data[1] * scale);
     final_vector_[legs_queue_.front()] = frame.M * (*(vector_iter + legs_queue_.front())).p + frame.p;
