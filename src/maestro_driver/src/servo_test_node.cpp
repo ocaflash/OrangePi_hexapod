@@ -32,7 +32,6 @@ public:
         }
         
         RCLCPP_INFO(this->get_logger(), "Maestro connected!");
-        RCLCPP_INFO(this->get_logger(), "");
         RCLCPP_INFO(this->get_logger(), "=== ТЕСТ СЕРВОПРИВОДОВ ===");
         RCLCPP_INFO(this->get_logger(), "Ожидаемый маппинг каналов:");
         RCLCPP_INFO(this->get_logger(), "  Ch 0-2:   R1 (coxa, femur, tibia)");
@@ -41,7 +40,6 @@ public:
         RCLCPP_INFO(this->get_logger(), "  Ch 9-11:  L1 (coxa, femur, tibia)");
         RCLCPP_INFO(this->get_logger(), "  Ch 12-14: L2 (coxa, femur, tibia)");
         RCLCPP_INFO(this->get_logger(), "  Ch 15-17: L3 (coxa, femur, tibia)");
-        RCLCPP_INFO(this->get_logger(), "");
 
         // Определяем какие каналы тестировать
         int start_ch = (test_channel >= 0) ? test_channel : 0;
@@ -91,8 +89,6 @@ public:
                 maestro_->setTarget(ch, 6000);
                 std::this_thread::sleep_for(std::chrono::milliseconds(400));
             }
-            
-            RCLCPP_INFO(this->get_logger(), "");
         }
 
         RCLCPP_INFO(this->get_logger(), "=== ТЕСТ ЗАВЕРШЁН ===");
