@@ -1,7 +1,4 @@
 #include "gait.hpp"
-#include <algorithm>
-#include <cmath>
-#include <kdl/velocityprofile_spline.hpp>
 
 Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0) {
     legs_queue_.push(5);
@@ -37,37 +34,24 @@ void Gait::setAlpha(double alpha) {
 }
 
 void Gait::setPath() {
-    // Paths are created inside setTrajectory() so that Trajectory_Segment can own all KDL
-    // heap objects consistently (avoids invalid free with stack/member pointers).
+    path_support_ = new KDL::Path_Line(d, a, rot_, path_tolerance_, true);
+    path_transfer_ = new KDL::Path_RoundedComposite(rounded_radius_, path_tolerance_, rot_);
+    path_transfer_->Add(a);
+    path_transfer_->Add(b);
+    path_transfer_->Add(c);
+    path_transfer_->Add(d);
+    path_transfer_->Finish();
 }
 
 void Gait::setTrajectory(double sup_path_duration, double tran_path_duration) {
-    // Destroy old trajectories first (they may free their internal objects)
-    trajectory_support_.reset();
-    trajectory_transfer_.reset();
-
-    // Allocate everything on heap and hand pointers to Trajectory_Segment.
-    auto* rot_support = new KDL::RotationalInterpolation_SingleAxis();
-    auto* rot_transfer = new KDL::RotationalInterpolation_SingleAxis();
-
-    auto* path_support = new KDL::Path_Line(d, a, rot_support, path_tolerance_, true);
-    auto* path_transfer = new KDL::Path_RoundedComposite(rounded_radius_, path_tolerance_, rot_transfer);
-    path_transfer->Add(a);
-    path_transfer->Add(b);
-    path_transfer->Add(c);
-    path_transfer->Add(d);
-    path_transfer->Finish();
-
-    auto* prof_support = new KDL::VelocityProfile_Spline();
-    auto* prof_transfer = new KDL::VelocityProfile_Spline();
-    prof_support->SetProfileDuration(0, path_support->PathLength(), sup_path_duration);
-    prof_transfer->SetProfileDuration(0, path_transfer->PathLength(), tran_path_duration);
-
-    trajectory_support_ = std::make_unique<KDL::Trajectory_Segment>(path_support, prof_support);
-    trajectory_transfer_ = std::make_unique<KDL::Trajectory_Segment>(path_transfer, prof_transfer);
+    prof_support_.SetProfileDuration(0, path_support_->PathLength(), sup_path_duration);
+    prof_transfer_.SetProfileDuration(0, path_transfer_->PathLength(), tran_path_duration);
+    trajectory_transfer_ = new KDL::Trajectory_Segment(path_transfer_, &prof_transfer_);
+    trajectory_support_ = new KDL::Trajectory_Segment(path_support_, &prof_support_);
 }
 
-KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration) {
+KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, 
+                              double fi, double scale, double alpha, double duration) {
     setFi(fi);
     setAlpha(alpha);
     setPath();
@@ -76,37 +60,33 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
 
     auto now_sec = rclcpp::Clock().now().seconds();
 
-    if (run_state_ == false) {
+    if (!run_state_) {
         run_state_ = true;
         phase_ = 0;
         begin_sec_ = now_sec;
         passed_sec_ = 0;
     }
-    if (pause_state_ == true) {
+    if (pause_state_) {
         begin_sec_ = now_sec - passed_sec_;
         pause_state_ = false;
     }
 
     passed_sec_ = now_sec - begin_sec_;
-    
-    // Clamp passed_sec_ to trajectory duration
-    double t_transfer = std::min(std::max(0.0, passed_sec_), trajectory_transfer_->Duration());
-    double t_support = std::min(std::max(0.0, passed_sec_), trajectory_support_->Duration());
-    
+
     for (int i = phase_; i < num_legs_; i += 2) {
-        frame = trajectory_transfer_->Pos(t_transfer);
+        frame = trajectory_transfer_->Pos(passed_sec_);
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
         final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
     }
     for (int i = !phase_; i < num_legs_; i += 2) {
-        frame = trajectory_support_->Pos(t_support);
+        frame = trajectory_support_->Pos(passed_sec_);
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
         final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
     }
 
-    if (passed_sec_ >= duration - 0.02 && run_state_ == true) {
+    if (passed_sec_ >= duration - 0.02 && run_state_) {
         begin_sec_ = now_sec;
         passed_sec_ = 0;
         phase_ = !phase_;
@@ -114,7 +94,8 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
     return final_vector_;
 }
 
-KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration) {
+KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter, 
+                              double fi, double scale, double alpha, double duration) {
     double phase_offset = duration / num_legs_;
     setFi(fi);
     setAlpha(alpha);
@@ -123,43 +104,39 @@ KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter
 
     auto now_sec = rclcpp::Clock().now().seconds();
 
-    if (run_state_ == false) {
+    if (!run_state_) {
         run_state_ = true;
         begin_sec_ = now_sec;
         passed_sec_ = 0;
     }
 
-    if (pause_state_ == true) {
+    if (pause_state_) {
         begin_sec_ = now_sec - passed_sec_;
         pause_state_ = false;
     }
 
     passed_sec_ = now_sec - begin_sec_;
 
-    getTipVector(trajectory_transfer_.get(), phase_offset, vector_iter, scale);
-    getTipVector(trajectory_transfer_.get(), 0, vector_iter, scale);
-    getTipVector(trajectory_support_.get(), 3 * phase_offset, vector_iter, scale);
-    getTipVector(trajectory_support_.get(), 2 * phase_offset, vector_iter, scale);
-    getTipVector(trajectory_support_.get(), phase_offset, vector_iter, scale);
-    getTipVector(trajectory_support_.get(), 0, vector_iter, scale);
+    getTipVector(trajectory_transfer_, phase_offset, vector_iter, scale);
+    getTipVector(trajectory_transfer_, 0, vector_iter, scale);
+    getTipVector(trajectory_support_, 3 * phase_offset, vector_iter, scale);
+    getTipVector(trajectory_support_, 2 * phase_offset, vector_iter, scale);
+    getTipVector(trajectory_support_, phase_offset, vector_iter, scale);
+    getTipVector(trajectory_support_, 0, vector_iter, scale);
 
-    if (passed_sec_ >= phase_offset - 0.02 && run_state_ == true) {
+    if (passed_sec_ >= phase_offset - 0.02 && run_state_) {
         begin_sec_ = now_sec;
         passed_sec_ = 0;
-
         legs_queue_.push(legs_queue_.front());
         legs_queue_.pop();
     }
     return final_vector_;
 }
 
-void Gait::getTipVector(const KDL::Trajectory_Segment* trajectory, double phase_offset,
+void Gait::getTipVector(KDL::Trajectory_Segment* trajectory, double phase_offset,
                         std::vector<KDL::Frame>::const_iterator vector_iter, double scale) {
     KDL::Frame frame;
-    double t = passed_sec_ + phase_offset;
-    // Clamp time to trajectory duration
-    t = std::min(std::max(0.0, t), trajectory->Duration());
-    frame = trajectory->Pos(t);
+    frame = trajectory->Pos(passed_sec_ + phase_offset);
     frame.p.x(frame.p.data[0] * scale);
     frame.p.y(frame.p.data[1] * scale);
     final_vector_[legs_queue_.front()] = frame.M * (*(vector_iter + legs_queue_.front())).p + frame.p;

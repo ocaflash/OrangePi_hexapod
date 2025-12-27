@@ -7,8 +7,8 @@
 #include <kdl/trajectory_segment.hpp>
 #include <kdl/path_roundedcomposite.hpp>
 #include <kdl/rotational_interpolation_sa.hpp>
+#include <kdl/velocityprofile_spline.hpp>
 #include <queue>
-#include <memory>
 
 #define NUM_LEGS 6
 #define NUM_JOINTS 3
@@ -18,18 +18,22 @@ public:
     Gait();
     void setTrapezoid(double low_rad, double high_rad, double height, double z,
                       double path_tolerance = 0.005, double rounded_radius = 0.02);
-    KDL::Vector* RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration);
-    KDL::Vector* RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter, double fi, double scale, double alpha, double duration);
+    KDL::Vector* RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, 
+                           double fi, double scale, double alpha, double duration);
+    KDL::Vector* RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter, 
+                           double fi, double scale, double alpha, double duration);
     void Pause();
     void Stop();
 
     KDL::Frame a, b, c, d;
+    KDL::Trajectory_Segment* trajectory_transfer_;
+    KDL::Trajectory_Segment* trajectory_support_;
 
 private:
     static constexpr unsigned int num_joints_ = NUM_JOINTS;
     static constexpr unsigned int num_legs_ = NUM_LEGS;
 
-    void getTipVector(const KDL::Trajectory_Segment* trajectory, double phase_offset,
+    void getTipVector(KDL::Trajectory_Segment* trajectory, double phase_offset,
                       std::vector<KDL::Frame>::const_iterator vector_iter, double scale);
     void setFi(double fi);
     void setAlpha(double alpha);
@@ -43,8 +47,10 @@ private:
     double low_rad_, high_rad_, height_, z_body_;
     double path_tolerance_, rounded_radius_;
     KDL::Vector final_vector_[NUM_LEGS];
-    std::unique_ptr<KDL::Trajectory_Segment> trajectory_transfer_;
-    std::unique_ptr<KDL::Trajectory_Segment> trajectory_support_;
+    KDL::RotationalInterpolation_SingleAxis* rot_ = new KDL::RotationalInterpolation_SingleAxis();
+    KDL::Path_Line* path_support_;
+    KDL::Path_RoundedComposite* path_transfer_;
+    KDL::VelocityProfile_Spline prof_support_, prof_transfer_;
 };
 
 #endif /* GAIT_HPP_ */

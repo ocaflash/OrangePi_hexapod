@@ -1,23 +1,18 @@
 #include <rclcpp/rclcpp.hpp>
 #include <crab_msgs/msg/legs_joints_state.hpp>
 #include <algorithm>
-#include <thread>
-#include <chrono>
 #include "PolstroSerialInterface.h"
 
+// Направление вращения для каждого канала
+// Правые ноги: coxa(+), femur(-), tibia(+)
+// Левые ноги: coxa(+), femur(+), tibia(-)
 const int rotation_direction[18] = {
-    // R1: coxa, femur, tibia (каналы 0, 1, 2)
-    1, -1, 1,
-    // R2: coxa, femur, tibia (каналы 3, 4, 5)
-    1, -1, 1,
-    // R3: coxa, femur, tibia (каналы 6, 7, 8)
-    1, -1, 1,
-    // L1: coxa, femur, tibia (каналы 9, 10, 11)
-    1, 1, -1,
-    // L2: coxa, femur, tibia (каналы 12, 13, 14)
-    1, 1, -1,
-    // L3: coxa, femur, tibia (каналы 15, 16, 17)
-    1, 1, -1
+    1, -1, 1,   // R1: ch 0,1,2
+    1, -1, 1,   // R2: ch 3,4,5
+    1, -1, 1,   // R3: ch 6,7,8
+    1, 1, -1,   // L1: ch 9,10,11
+    1, 1, -1,   // L2: ch 12,13,14
+    1, 1, -1    // L3: ch 15,16,17
 };
 
 class MaestroController : public rclcpp::Node {
@@ -37,7 +32,7 @@ public:
         maestro_ = Polstro::SerialInterface::createSerialInterface(port_name, baud_rate);
 
         if (maestro_ && maestro_->isOpen()) {
-            RCLCPP_INFO(this->get_logger(), "Maestro servo controller connected on %s @ %d baud", 
+            RCLCPP_INFO(this->get_logger(), "Maestro connected on %s @ %d baud", 
                         port_name.c_str(), baud_rate);
         } else {
             RCLCPP_ERROR(this->get_logger(), "Failed to open Maestro on %s", port_name.c_str());
@@ -47,7 +42,7 @@ public:
             "joints_to_controller", 1,
             std::bind(&MaestroController::chatterLegsState, this, std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "Maestro servo controller is ready...");
+        RCLCPP_INFO(this->get_logger(), "Maestro servo controller ready");
     }
 
     ~MaestroController() {
@@ -63,30 +58,12 @@ private:
         float target_value;
         int s_num;
 
-        // Логируем входные данные и выходные PWM значения
-        static int log_counter = 0;
-        bool do_log = (++log_counter >= 25);  // Каждые 0.5 сек при 50Hz
-        if (do_log) {
-            log_counter = 0;
-            RCLCPP_INFO(this->get_logger(), "=== Servo commands ===");
-        }
-
         for (int i = 0; i < num_legs_; i++) {
             for (int j = 0; j < num_joints_; j++) {
                 s_num = i * 3 + j;
                 target_value = 127 + rotation_direction[s_num] * legs_jnts->joints_state[i].joint[j] * limit_coef_;
-                // Clamp to valid range
                 target_value = std::max(0.0f, std::min(254.0f, target_value));
-                
-                if (do_log && j == 0) {  // Логируем только coxa для краткости
-                    const char* leg_names[] = {"R1", "R2", "R3", "L1", "L2", "L3"};
-                    RCLCPP_INFO(this->get_logger(), "  %s ch%d: rad=%.3f -> pwm=%d (dir=%d)",
-                        leg_names[i], s_num, legs_jnts->joints_state[i].joint[j],
-                        static_cast<int>(target_value), rotation_direction[s_num]);
-                }
-                
                 maestro_->setTargetMSS(s_num, static_cast<unsigned char>(target_value));
-                std::this_thread::sleep_for(std::chrono::microseconds(100));
             }
         }
     }

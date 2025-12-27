@@ -1,151 +1,50 @@
 #include "teleop_joy.hpp"
 #include <cmath>
-#include <algorithm>
-#include <thread>
 
 using namespace std::chrono_literals;
 
-// Deadzone threshold for joystick axes
-constexpr float DEADZONE = 0.15f;
-
-// Apply deadzone to axis value
-inline float applyDeadzone(float value) {
-    return (std::abs(value) < DEADZONE) ? 0.0f : value;
-}
-
-// Safe access helpers for varying controller mappings
-static inline int getButton(const sensor_msgs::msg::Joy::SharedPtr& joy, size_t idx) {
-    return (joy && joy->buttons.size() > idx) ? joy->buttons[idx] : 0;
-}
-
-static inline float getAxis(const sensor_msgs::msg::Joy::SharedPtr& joy, size_t idx) {
-    return (joy && joy->axes.size() > idx) ? joy->axes[idx] : 0.0f;
-}
-
-TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(false), 
-                         imu_flag_(false), gyro_button_pressed_(false),
-                         ds4_gyro_x_(0), ds4_gyro_y_(0), ds4_gyro_z_(0) {
+TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(false), imu_flag_(false) {
     this->declare_parameter<double>("clearance", 0.045);
-    this->declare_parameter<double>("seat_height", 0.016);
-    this->declare_parameter<double>("default_leg_radius", 0.11);
     z_ = this->get_parameter("clearance").as_double();
-    seat_height_ = this->get_parameter("seat_height").as_double();
-    default_leg_radius_ = this->get_parameter("default_leg_radius").as_double();
 
-    body_state_.leg_radius = default_leg_radius_;
+    body_state_.leg_radius = 0.11;
     body_state_.z = -z_;
 
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
         "joy", 1, std::bind(&TeleopJoy::joyCallback, this, std::placeholders::_1));
     
-    // Subscribe to DS4 IMU data from ds4_imu_publisher node
-    ds4_imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "/ds4/imu", 10, std::bind(&TeleopJoy::ds4ImuCallback, this, std::placeholders::_1));
-    
     move_body_pub_ = this->create_publisher<crab_msgs::msg::BodyState>("/teleop/move_body", 1);
     body_cmd_pub_ = this->create_publisher<crab_msgs::msg::BodyCommand>("/teleop/body_command", 1);
     gait_cmd_pub_ = this->create_publisher<crab_msgs::msg::GaitCommand>("/teleop/gait_control", 1);
 
-    RCLCPP_INFO(this->get_logger(), "===========================================");
     RCLCPP_INFO(this->get_logger(), "Starting DS4 teleop converter...");
-    RCLCPP_INFO(this->get_logger(), "Controls: OPTIONS=stand/sit, Left stick=walk");
-    RCLCPP_INFO(this->get_logger(), "Robot starts SEATED. Press OPTIONS to stand up first!");
-    RCLCPP_INFO(this->get_logger(), "===========================================");
-}
-
-void TeleopJoy::ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu) {
-    ds4_gyro_x_ = imu->angular_velocity.x;
-    ds4_gyro_y_ = imu->angular_velocity.y;
-    ds4_gyro_z_ = imu->angular_velocity.z;
-    
-    // If gyro button is pressed and robot is standing, use gyro for body control
-    if (gyro_button_pressed_ && start_flag_) {
-        // Scale factors reduced for smaller amplitude
-        // Max tilt ~0.15 rad (~8.5 degrees)
-        body_state_.roll = std::clamp(ds4_gyro_x_ * 0.02, -0.15, 0.15);
-        body_state_.pitch = std::clamp(-ds4_gyro_y_ * 0.02, -0.15, 0.15);
-        move_body_pub_->publish(body_state_);
-    }
 }
 
 void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
-    // Debug: log that we received joy message
-    static int joy_counter = 0;
-    static bool first_message = true;
-    
-    if (first_message) {
-        RCLCPP_INFO(this->get_logger(), "First joy message received! Joystick connected.");
-        first_message = false;
-    }
-    
-    if (++joy_counter >= 100) {  // Every ~2 seconds at 50Hz
-        joy_counter = 0;
-        RCLCPP_DEBUG(this->get_logger(), "Joy: axes=%zu buttons=%zu start_flag=%d",
-                    joy->axes.size(), joy->buttons.size(), start_flag_);
-    }
-    
-    const int btn_start = getButton(joy, button_start_);
-    const int btn_imu = getButton(joy, button_imu_);
-    const int btn_gait_switch = getButton(joy, button_gait_switch_);
-    const int btn_l1 = getButton(joy, button_left_shift_);
-    const int btn_r1 = getButton(joy, button_right_shift_);
-    const int btn_gyro = getButton(joy, button_gyro_control_);
+    // Безопасный доступ к кнопкам и осям
+    auto getButton = [&](size_t idx) -> int {
+        return (joy->buttons.size() > idx) ? joy->buttons[idx] : 0;
+    };
+    auto getAxis = [&](size_t idx) -> float {
+        return (joy->axes.size() > idx) ? joy->axes[idx] : 0.0f;
+    };
 
-    const float ax_lx = getAxis(joy, axis_body_roll_);
-    const float ax_ly = getAxis(joy, axis_body_pitch_);
-    const float ax_rx = getAxis(joy, axis_body_yaw_);
-    const float ax_ry = getAxis(joy, axis_body_z_off_);
-
-    // Rising-edge detection (act once per press, not while held) + time debounce
-    const bool start_pressed = (btn_start != 0) && (prev_btn_start_ == 0);
-    const bool imu_pressed = (btn_imu != 0) && (prev_btn_imu_ == 0);
-    const bool gait_switch_pressed = (btn_gait_switch != 0) && (prev_btn_gait_switch_ == 0);
-    const auto now = this->now();
-    const auto debounce = rclcpp::Duration::from_seconds(0.35);
-
-    if (start_pressed && !imu_flag_ && (now - last_start_toggle_time_) > debounce) {
-        last_start_toggle_time_ = now;
-        
-        RCLCPP_INFO(this->get_logger(), "OPTIONS pressed! start_flag was %d", start_flag_);
-
-        // IMPORTANT: OPTIONS should NEVER start walking. Stop gait explicitly on mode change.
-        gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
-        gait_command_.scale = 0.0;
-        gait_command_.alpha = 0.0;
-        gait_command_.fi = 0.0;
-        gait_cmd_pub_->publish(gait_command_);
-
+    // OPTIONS - встать/сесть
+    if (getButton(button_start_) && !imu_flag_) {
         if (!start_flag_) {
             start_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::STAND_UP_CMD;
             body_cmd_pub_->publish(body_command_);
-            // Ensure teleop body_state does not keep "seated" Z / leg_radius after standing up
-            body_state_.z = -z_;
-            // IMPORTANT: use nominal leg radius for standing/walking to keep IK reachable
-            body_state_.leg_radius = default_leg_radius_;
-            // Reset offsets/orientation on mode switch to avoid stale RPY/offsets affecting IK
-            body_state_.x = 0.0;
-            body_state_.y = 0.0;
-            body_state_.roll = 0.0;
-            body_state_.pitch = 0.0;
-            body_state_.yaw = 0.0;
-            gyro_button_pressed_ = false;
-            move_body_pub_->publish(body_state_);
         } else {
             start_flag_ = false;
             body_command_.cmd = crab_msgs::msg::BodyCommand::SEAT_DOWN_CMD;
             body_cmd_pub_->publish(body_command_);
-            // Switch teleop state to seated posture
-            body_state_.z = -seat_height_;
-            body_state_.roll = 0.0;
-            body_state_.pitch = 0.0;
-            body_state_.yaw = 0.0;
-            move_body_pub_->publish(body_state_);
         }
+        std::this_thread::sleep_for(1000ms);
     }
 
-    if (imu_pressed && !start_flag_ && (now - last_imu_toggle_time_) > debounce) {
-        last_imu_toggle_time_ = now;
+    // CROSS - IMU режим
+    if (getButton(button_imu_) && !start_flag_) {
         if (!imu_flag_) {
             imu_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::IMU_START_CMD;
@@ -155,64 +54,44 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             body_command_.cmd = crab_msgs::msg::BodyCommand::IMU_STOP_CMD;
             body_cmd_pub_->publish(body_command_);
         }
+        std::this_thread::sleep_for(1000ms);
     }
 
-    if (gait_switch_pressed && (now - last_gait_toggle_time_) > debounce) {
-        last_gait_toggle_time_ = now;
-        if (!gait_flag_) {
-            gait_flag_ = true;
-            gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
-        } else {
-            gait_flag_ = false;
-            gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
-        }
+    // TRIANGLE - переключение походки
+    if (getButton(button_gait_switch_)) {
+        gait_flag_ = !gait_flag_;
+        gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
         gait_cmd_pub_->publish(gait_command_);
+        std::this_thread::sleep_for(500ms);
     }
 
     if (start_flag_) {
-        // RPY Signal via sticks (L1 held)
-        if (btn_l1) {
-            body_state_.roll = 0.25 * ax_lx;
-            body_state_.pitch = -0.25 * ax_ly;
-            body_state_.yaw = -0.28 * ax_rx;
+        // L1 - управление RPY
+        if (getButton(button_left_shift_)) {
+            body_state_.roll = 0.25 * getAxis(axis_body_roll_);
+            body_state_.pitch = -0.25 * getAxis(axis_body_pitch_);
+            body_state_.yaw = -0.28 * getAxis(axis_body_yaw_);
             move_body_pub_->publish(body_state_);
         }
-        // RPY Signal via controller gyroscope (Square held)
-        // Gyro data comes from ds4_imu_publisher via /ds4/imu topic
-        gyro_button_pressed_ = (btn_gyro != 0);
-        // Note: actual gyro control happens in ds4ImuCallback when button is pressed
-        // Offset Signal (R1 held)
-        if (btn_r1) {
-            body_state_.y = -0.05 * ax_lx;
-            body_state_.x = -0.05 * ax_ly;
-            if (ax_ry < 0) {
-                body_state_.z = -0.03 * ax_ry - z_;
+        // R1 - управление смещением
+        if (getButton(button_right_shift_)) {
+            body_state_.y = -0.05 * getAxis(axis_body_y_off_);
+            body_state_.x = -0.05 * getAxis(axis_body_x_off_);
+            if (getAxis(axis_body_z_off_) < 0) {
+                body_state_.z = -0.03 * getAxis(axis_body_z_off_) - z_;
             } else {
-                body_state_.z = -0.1 * ax_ry - z_;
+                body_state_.z = -0.1 * getAxis(axis_body_z_off_) - z_;
             }
             move_body_pub_->publish(body_state_);
         }
-        // Gait Signals
-        if (!btn_l1 && !btn_r1) {
-            // Apply deadzone to all axes
-            float fi_x = applyDeadzone(getAxis(joy, axis_fi_x_));
-            float fi_y = applyDeadzone(getAxis(joy, axis_fi_y_));
-            float alpha = applyDeadzone(getAxis(joy, axis_alpha_));
-            float scale = applyDeadzone(getAxis(joy, axis_scale_));
+        // Походка - когда L1 и R1 не нажаты
+        if (!getButton(button_left_shift_) && !getButton(button_right_shift_)) {
+            float fi_x = getAxis(axis_fi_x_);
+            float fi_y = getAxis(axis_fi_y_);
+            float alpha = getAxis(axis_alpha_);
+            float scale = getAxis(axis_scale_);
 
-            // Debug: log raw and processed values
-            static int gait_log_counter = 0;
-            if (++gait_log_counter >= 25) {  // Every 0.5 sec
-                gait_log_counter = 0;
-                float raw_fi_x = getAxis(joy, axis_fi_x_);
-                float raw_fi_y = getAxis(joy, axis_fi_y_);
-                RCLCPP_INFO(this->get_logger(), 
-                    "Stick: raw=[%.3f,%.3f] after_deadzone=[%.3f,%.3f] axes_count=%zu",
-                    raw_fi_x, raw_fi_y, fi_x, fi_y, joy->axes.size());
-            }
-
-            // Start walking ONLY from left stick (fi_x/fi_y). This prevents "walking on OPTIONS"
-            // due to right-stick drift.
+            // Левый стик - направление и скорость
             if (fi_x != 0 || fi_y != 0) {
                 if (!gait_flag_) {
                     gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
@@ -224,61 +103,37 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
                 gait_command_.fi = std::atan2(fi_x, fi_y);
                 gait_command_.scale = std::pow(a + b, 0.5) > 1 ? 1 : std::pow(a + b, 0.5);
                 gait_command_.alpha = 0;
-                
-                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 500,
-                    "Gait cmd: %s fi=%.2f scale=%.2f", 
-                    gait_flag_ ? "TRIPOD" : "RIPPLE", gait_command_.fi, gait_command_.scale);
-            } else {
-                // All sticks in neutral - PAUSE
+            }
+
+            // Правый стик - поворот на месте
+            if (alpha != 0 || scale != 0) {
+                if (!gait_flag_) {
+                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
+                } else {
+                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNTRIPOD;
+                }
+                gait_command_.fi = (scale > 0) ? 0 : 3.14;
+                gait_command_.scale = scale;
+                if (gait_command_.scale < 0) gait_command_.scale *= -1;
+                gait_command_.alpha = ((alpha > 0) ? 1 : -1) * 0.06 * (1 - gait_command_.scale) + 0.11 * alpha;
+            }
+
+            // Все стики в нейтрали - пауза
+            if (!alpha && !scale && !fi_x && !fi_y) {
                 gait_command_.cmd = crab_msgs::msg::GaitCommand::PAUSE;
-                gait_command_.scale = 0.0;
-                gait_command_.alpha = 0.0;
             }
             gait_cmd_pub_->publish(gait_command_);
         }
     } else {
-        // Leg radius adjustment when seated (L2 trigger pressed - use axis, not button)
-        // L2 axis varies by driver. Common cases:
-        // - [-1..1]: 0.0 ~ not pressed, -1.0 ~ fully pressed
-        // - [0..1]:  0.0 ~ not pressed,  1.0 ~ fully pressed
-        // We treat "pressed" only when it is clearly pressed, to avoid always-on publishing.
-        const float l2_axis = getAxis(joy, DS4_AXIS_L2);
-        const bool l2_pressed = (l2_axis < -0.5f) || (l2_axis > 0.8f);
-
-        // Helpful hint: sticks won't walk while seated (start_flag_ == false)
-        const bool sticks_moved =
-            (std::abs(ax_lx) > 0.2f) || (std::abs(ax_ly) > 0.2f) ||
-            (std::abs(ax_rx) > 0.2f) || (std::abs(ax_ry) > 0.2f);
-        if (sticks_moved && !l2_pressed) {
-            RCLCPP_INFO_THROTTLE(
-                this->get_logger(), *this->get_clock(), 2000,
-                "Robot is SEATED. Press OPTIONS to stand up; walking commands are ignored while seated. "
-                "(Deadzone=%.2f)", DEADZONE);
-        }
-
-        if (l2_pressed && !imu_flag_) {
-            body_state_.z = -seat_height_;  // Seated position
-            // Keep radius changes conservative to avoid IK failures during low Z
-            body_state_.leg_radius = std::clamp(0.04 * ax_rx + default_leg_radius_, 0.10, 0.12);
-            // Keep seated posture stable (avoid confusing stale RPY output)
-            body_state_.roll = 0.0;
-            body_state_.pitch = 0.0;
-            body_state_.yaw = 0.0;
-            // Throttle to reduce servo jitter if joystick is noisy
+        // Робот сидит - регулировка leg_radius
+        if (getButton(button_right_shift_2_) && !imu_flag_) {
+            body_state_.z = -0.01;
+            body_state_.leg_radius = 0.06 * getAxis(axis_body_yaw_) + 0.11;
             move_body_pub_->publish(body_state_);
-            RCLCPP_DEBUG(this->get_logger(), "L2 pressed: leg_radius=%.3f", body_state_.leg_radius);
         }
-        // Only publish STOP once when transitioning to stopped state
-        if (gait_command_.cmd != crab_msgs::msg::GaitCommand::STOP) {
-            gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
-            gait_cmd_pub_->publish(gait_command_);
-        }
+        gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
+        gait_cmd_pub_->publish(gait_command_);
     }
-
-    // Update previous button states at end of callback
-    prev_btn_start_ = btn_start;
-    prev_btn_imu_ = btn_imu;
-    prev_btn_gait_switch_ = btn_gait_switch;
 }
 
 int main(int argc, char **argv) {

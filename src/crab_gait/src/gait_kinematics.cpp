@@ -15,16 +15,12 @@ GaitKinematics::GaitKinematics() : Node("gait_kinematics") {
     this->declare_parameter<double>("duration_ripple", 1.5);
     this->declare_parameter<double>("duration_tripod", 1.0);
     this->declare_parameter<double>("leg_radius", 0.11);
-    this->declare_parameter<double>("path_tolerance", 0.005);
-    this->declare_parameter<double>("rounded_radius", 0.02);
 
     gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
 }
 
 bool GaitKinematics::init() {
-    std::string robot_desc_string;
-
-    robot_desc_string = this->get_parameter("robot_description").as_string();
+    std::string robot_desc_string = this->get_parameter("robot_description").as_string();
     if (robot_desc_string.empty()) {
         RCLCPP_FATAL(this->get_logger(), "Could not load the xml from parameter: robot_description");
         return false;
@@ -32,7 +28,6 @@ bool GaitKinematics::init() {
 
     root_name_ = this->get_parameter("root_name_body").as_string();
     tip_name_ = this->get_parameter("tip_name_body").as_string();
-
     trap_low_r_ = this->get_parameter("trapezoid_low_radius").as_double();
     trap_high_r_ = this->get_parameter("trapezoid_high_radius").as_double();
     trap_h_ = this->get_parameter("trapezoid_h").as_double();
@@ -40,8 +35,6 @@ bool GaitKinematics::init() {
     d_ripple_ = this->get_parameter("duration_ripple").as_double();
     d_tripod_ = this->get_parameter("duration_tripod").as_double();
     leg_radius_ = this->get_parameter("leg_radius").as_double();
-    path_tolerance_ = this->get_parameter("path_tolerance").as_double();
-    rounded_radius_ = this->get_parameter("rounded_radius").as_double();
 
     if (!loadModel(robot_desc_string)) {
         RCLCPP_FATAL(this->get_logger(), "Could not load models!");
@@ -60,65 +53,37 @@ bool GaitKinematics::init() {
 void GaitKinematics::gaitGenerator() {
     KDL::Vector* final_vector;
     Gait gait;
-    gait.setTrapezoid(trap_low_r_, trap_high_r_, trap_h_, trap_z_, path_tolerance_, rounded_radius_);
+    gait.setTrapezoid(trap_low_r_, trap_high_r_, trap_h_, trap_z_);
 
-    RCLCPP_INFO(this->get_logger(), "Gait generator started. Trapezoid: low_r=%.3f high_r=%.3f h=%.3f z=%.3f",
-                trap_low_r_, trap_high_r_, trap_h_, trap_z_);
+    RCLCPP_INFO(this->get_logger(), "Gait generator started");
 
-    rclcpp::Rate rate(50);  // 50 Hz для плавного движения
-    int log_counter = 0;
+    rclcpp::Rate rate(25);  // 25 Hz как в оригинале
     
     while (rclcpp::ok()) {
-        // Only run gait if scale > 0 to avoid KDL path errors
-        if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNRIPPLE && gait_command_.scale > 0.01) {
-            if (log_counter % 50 == 0) {
-                RCLCPP_INFO(this->get_logger(), "RUNRIPPLE: fi=%.2f scale=%.2f alpha=%.2f", 
-                            gait_command_.fi, gait_command_.scale, gait_command_.alpha);
-            }
+        if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNRIPPLE) {
             final_vector = gait.RunRipple(frames_.begin(), gait_command_.fi, gait_command_.scale,
                                           gait_command_.alpha, d_ripple_);
             if (callService(final_vector)) {
                 joints_pub_->publish(legs_);
-                if (log_counter % 50 == 0) {
-                    RCLCPP_INFO(this->get_logger(), "Published joints: leg0=[%.3f,%.3f,%.3f]",
-                                legs_.joints_state[0].joint[0], legs_.joints_state[0].joint[1], 
-                                legs_.joints_state[0].joint[2]);
-                }
             }
-        } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNTRIPOD && gait_command_.scale > 0.01) {
-            if (log_counter % 50 == 0) {
-                RCLCPP_INFO(this->get_logger(), "RUNTRIPOD: fi=%.2f scale=%.2f alpha=%.2f", 
-                            gait_command_.fi, gait_command_.scale, gait_command_.alpha);
-            }
+        } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNTRIPOD) {
             final_vector = gait.RunTripod(frames_.begin(), gait_command_.fi, gait_command_.scale,
                                           gait_command_.alpha, d_tripod_);
             if (callService(final_vector)) {
                 joints_pub_->publish(legs_);
-                if (log_counter % 50 == 0) {
-                    RCLCPP_INFO(this->get_logger(), "Published joints: leg0=[%.3f,%.3f,%.3f]",
-                                legs_.joints_state[0].joint[0], legs_.joints_state[0].joint[1], 
-                                legs_.joints_state[0].joint[2]);
-                }
             }
         } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::PAUSE) {
             gait.Pause();
         } else {
-            // STOP or invalid command or scale too small
             gait.Stop();
         }
+        
         rclcpp::spin_some(this->get_node_base_interface());
         rate.sleep();
-        log_counter++;
     }
 }
 
 void GaitKinematics::teleopGaitCtrl(const crab_msgs::msg::GaitCommand::SharedPtr gait_cmd) {
-    static int prev_cmd = -1;
-    if (gait_cmd->cmd != prev_cmd) {
-        RCLCPP_INFO(this->get_logger(), "Received gait command: cmd=%d fi=%.2f scale=%.2f alpha=%.2f",
-                    gait_cmd->cmd, gait_cmd->fi, gait_cmd->scale, gait_cmd->alpha);
-        prev_cmd = gait_cmd->cmd;
-    }
     gait_command_.cmd = gait_cmd->cmd;
     gait_command_.fi = gait_cmd->fi;
     gait_command_.alpha = gait_cmd->alpha;
@@ -186,8 +151,9 @@ bool GaitKinematics::loadModel(const std::string& xml) {
     }
     RCLCPP_INFO(this->get_logger(), "Get frames");
 
+    // Как в оригинале: leg_radius = 0.11 захардкожен
     for (size_t i = 0; i < num_legs_; i++) {
-        frames_[i] = frames_[i] * frames_[i + num_legs_] * KDL::Frame(KDL::Vector(leg_radius_, 0, 0));
+        frames_[i] = frames_[i] * frames_[i + num_legs_] * KDL::Frame(KDL::Vector(0.11, 0, 0));
     }
     frames_.resize(num_legs_);
 
