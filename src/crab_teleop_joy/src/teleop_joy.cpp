@@ -200,6 +200,17 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             float alpha = applyDeadzone(getAxis(joy, axis_alpha_));
             float scale = applyDeadzone(getAxis(joy, axis_scale_));
 
+            // Debug: log raw and processed values
+            static int gait_log_counter = 0;
+            if (++gait_log_counter >= 25) {  // Every 0.5 sec
+                gait_log_counter = 0;
+                float raw_fi_x = getAxis(joy, axis_fi_x_);
+                float raw_fi_y = getAxis(joy, axis_fi_y_);
+                RCLCPP_INFO(this->get_logger(), 
+                    "Stick: raw=[%.3f,%.3f] after_deadzone=[%.3f,%.3f] axes_count=%zu",
+                    raw_fi_x, raw_fi_y, fi_x, fi_y, joy->axes.size());
+            }
+
             // Start walking ONLY from left stick (fi_x/fi_y). This prevents "walking on OPTIONS"
             // due to right-stick drift.
             if (fi_x != 0 || fi_y != 0) {
