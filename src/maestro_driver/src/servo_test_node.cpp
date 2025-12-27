@@ -22,15 +22,36 @@ public:
 
         if (maestro_ && maestro_->isOpen()) {
             RCLCPP_INFO(this->get_logger(), "Maestro connected on %s", port_name.c_str());
+            
+            // Проверяем ошибки Maestro
+            unsigned short errors = 0;
+            if (maestro_->getErrors(errors)) {
+                if (errors != 0) {
+                    RCLCPP_WARN(this->get_logger(), "Maestro has errors: 0x%04X", errors);
+                    if (errors & 0x0001) RCLCPP_WARN(this->get_logger(), "  - Serial signal error");
+                    if (errors & 0x0002) RCLCPP_WARN(this->get_logger(), "  - Serial overrun error");
+                    if (errors & 0x0004) RCLCPP_WARN(this->get_logger(), "  - Serial buffer full");
+                    if (errors & 0x0008) RCLCPP_WARN(this->get_logger(), "  - Serial CRC error");
+                    if (errors & 0x0010) RCLCPP_WARN(this->get_logger(), "  - Serial protocol error");
+                    if (errors & 0x0020) RCLCPP_WARN(this->get_logger(), "  - Serial timeout");
+                    if (errors & 0x0040) RCLCPP_WARN(this->get_logger(), "  - Script stack error");
+                    if (errors & 0x0080) RCLCPP_WARN(this->get_logger(), "  - Script call stack error");
+                    if (errors & 0x0100) RCLCPP_WARN(this->get_logger(), "  - Script program counter error");
+                } else {
+                    RCLCPP_INFO(this->get_logger(), "Maestro: no errors");
+                }
+            } else {
+                RCLCPP_WARN(this->get_logger(), "Could not read Maestro errors (maybe wrong protocol?)");
+            }
         } else {
             RCLCPP_ERROR(this->get_logger(), "Failed to open Maestro on %s", port_name.c_str());
             return;
         }
 
-        // Сначала установим все сервы в нейтраль
-        RCLCPP_INFO(this->get_logger(), "Setting all servos to neutral (127)...");
+        // Сначала установим все сервы в нейтраль (используем Compact Protocol)
+        RCLCPP_INFO(this->get_logger(), "Setting all servos to neutral (6000 qus = 1.5ms)...");
         for (int ch = 0; ch < 18; ch++) {
-            maestro_->setTargetMSS(ch, 127);
+            maestro_->setTarget(ch, 6000);  // 6000 quarter-microseconds = 1.5ms = neutral
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
         std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -70,19 +91,26 @@ public:
             }
 
             RCLCPP_INFO(this->get_logger(), ">>> Канал %d: Ожидается %s %s", ch, leg_name.c_str(), joint_name.c_str());
-            RCLCPP_INFO(this->get_logger(), "    Двигаю 127 -> 90 -> 164 -> 127");
+            RCLCPP_INFO(this->get_logger(), "    Двигаю: neutral -> -30deg -> +30deg -> neutral");
 
-            // Двигаем в одну сторону
-            maestro_->setTargetMSS(ch, 90);
+            // Используем Compact Protocol (setTarget) вместо MiniSSC
+            // Значения в quarter-microseconds: 4000 = 1ms, 6000 = 1.5ms (neutral), 8000 = 2ms
+            
+            // Нейтраль
+            maestro_->setTarget(ch, 6000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            
+            // Двигаем в одну сторону (1.25ms = 5000 qus)
+            maestro_->setTarget(ch, 5000);
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             
-            // Двигаем в другую сторону
-            maestro_->setTargetMSS(ch, 164);
+            // Двигаем в другую сторону (1.75ms = 7000 qus)
+            maestro_->setTarget(ch, 7000);
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             
             // Возвращаем в нейтраль
-            maestro_->setTargetMSS(ch, 127);
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            maestro_->setTarget(ch, 6000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
             RCLCPP_INFO(this->get_logger(), "");
         }

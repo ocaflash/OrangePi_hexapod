@@ -13,11 +13,11 @@ const int rotation_direction[18] = {
     // R3: coxa, femur, tibia (каналы 6, 7, 8)
     1, -1, 1,
     // L1: coxa, femur, tibia (каналы 9, 10, 11)
-    -1, 1, -1,
+    1, 1, -1,
     // L2: coxa, femur, tibia (каналы 12, 13, 14)
-    -1, 1, -1,
+    1, 1, -1,
     // L3: coxa, femur, tibia (каналы 15, 16, 17)
-    -1, 1, -1
+    1, 1, -1
 };
 
 class MaestroController : public rclcpp::Node {
@@ -63,14 +63,19 @@ private:
         float target_value;
         int s_num;
 
-        // Логируем входные данные
+        // Логируем входные данные для всех ног
         static int log_counter = 0;
         if (++log_counter >= 25) {  // Каждые 0.5 сек при 50Hz
             log_counter = 0;
-            RCLCPP_INFO(this->get_logger(), 
-                "Input joints: R1=[%.3f,%.3f,%.3f] L1=[%.3f,%.3f,%.3f]",
-                legs_jnts->joints_state[0].joint[0], legs_jnts->joints_state[0].joint[1], legs_jnts->joints_state[0].joint[2],
-                legs_jnts->joints_state[3].joint[0], legs_jnts->joints_state[3].joint[1], legs_jnts->joints_state[3].joint[2]);
+            RCLCPP_INFO(this->get_logger(), "=== Input joints (radians) ===");
+            for (int leg = 0; leg < 6; leg++) {
+                const char* leg_names[] = {"R1", "R2", "R3", "L1", "L2", "L3"};
+                RCLCPP_INFO(this->get_logger(), "  %s: [%.3f, %.3f, %.3f]",
+                    leg_names[leg],
+                    legs_jnts->joints_state[leg].joint[0],
+                    legs_jnts->joints_state[leg].joint[1],
+                    legs_jnts->joints_state[leg].joint[2]);
+            }
         }
 
         for (int i = 0; i < num_legs_; i++) {
