@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <thread>
 #include "PolstroSerialInterface.h"
 
 const int rotation_direction[18] = {
@@ -14,9 +15,12 @@ const int rotation_direction[18] = {
     1, 1, -1
 };
 
+// Задержка между командами для предотвращения переполнения буфера Maestro (микросекунды)
+constexpr int INTER_COMMAND_DELAY_US = 200;
+
 class MaestroController : public rclcpp::Node {
 public:
-    MaestroController() : Node("maestro_servo_node"), initialized_(false), init_step_(0) {
+    MaestroController() : Node("maestro_servo_node"), initialized_(false), init_step_(0), current_init_servo_(0) {
         this->declare_parameter<double>("joint_lower_limit", -1.570796327);
         this->declare_parameter<double>("joint_upper_limit", 1.570796327);
         this->declare_parameter<std::string>("port_name", "/dev/ttyS5");
@@ -75,19 +79,23 @@ public:
     ~MaestroController() = default;
 
 private:
-    void sendTarget(int channel, float normalized_or_target) {
+    void sendTarget(int channel, float normalized_or_target, bool add_delay = true) {
         if (!maestro_ || !maestro_->isOpen()) return;
 
         if (protocol_ == "mini_ssc") {
             unsigned char v = static_cast<unsigned char>(std::clamp(normalized_or_target, 0.0f, 254.0f));
             maestro_->setTargetMSS(static_cast<unsigned char>(channel), v);
-            return;
+        } else {
+            // Default: compact protocol target in quarter-microseconds
+            unsigned short t = static_cast<unsigned short>(
+                std::clamp(normalized_or_target, static_cast<float>(target_min_), static_cast<float>(target_max_)));
+            maestro_->setTarget(static_cast<unsigned char>(channel), t);
         }
-
-        // Default: compact protocol target in quarter-microseconds
-        unsigned short t = static_cast<unsigned short>(
-            std::clamp(normalized_or_target, static_cast<float>(target_min_), static_cast<float>(target_max_)));
-        maestro_->setTarget(static_cast<unsigned char>(channel), t);
+        
+        // Небольшая задержка между командами для предотвращения переполнения буфера Maestro
+        if (add_delay) {
+            std::this_thread::sleep_for(std::chrono::microseconds(INTER_COMMAND_DELAY_US));
+        }
     }
 
     void initTimerCallback() {
@@ -101,36 +109,43 @@ private:
                 current_pos_[i] = 127.0f;
             }
             init_step_++;
+            current_init_servo_ = 0;
             return;
         }
         
-        // Gradually move all servos to neutral over ~60 steps (1.8 seconds)
-        bool all_done = true;
-        for (int i = 0; i < 18; i++) {
+        // Инициализируем по одному серво за раз для снижения нагрузки на шину и питание
+        if (current_init_servo_ < 18) {
+            int i = current_init_servo_;
             float diff = target_pos_[i] - current_pos_[i];
             if (std::abs(diff) > 0.5f) {
-                all_done = false;
                 // Move slowly toward target
-                if (std::abs(diff) > 2.0f) {
-                    current_pos_[i] += (diff > 0) ? 2.0f : -2.0f;
+                if (std::abs(diff) > 1.0f) {
+                    current_pos_[i] += (diff > 0) ? 1.0f : -1.0f;
                 } else {
                     current_pos_[i] = target_pos_[i];
                 }
             }
+            
             if (protocol_ == "mini_ssc") {
-                sendTarget(i, current_pos_[i]);
+                sendTarget(i, current_pos_[i], false);
             } else {
-                // compact: go to center pulse
-                sendTarget(i, static_cast<float>(target_center_));
+                sendTarget(i, static_cast<float>(target_center_), false);
             }
+            
+            // Переходим к следующему серво только когда текущий достиг цели
+            if (std::abs(target_pos_[i] - current_pos_[i]) <= 0.5f) {
+                current_init_servo_++;
+                if (current_init_servo_ < 18) {
+                    RCLCPP_DEBUG(this->get_logger(), "Initializing servo %d/%d", current_init_servo_ + 1, 18);
+                }
+            }
+            return;
         }
         
-        if (all_done) {
-            initialized_ = true;
-            init_timer_->cancel();
-            RCLCPP_INFO(this->get_logger(), "Servos initialized to neutral position");
-        }
-        
+        // Все сервы инициализированы
+        initialized_ = true;
+        init_timer_->cancel();
+        RCLCPP_INFO(this->get_logger(), "All servos initialized to neutral position");
         init_step_++;
     }
 
@@ -188,6 +203,7 @@ private:
     int target_min_, target_max_, target_center_;
     bool initialized_;
     int init_step_;
+    int current_init_servo_;
     rclcpp::TimerBase::SharedPtr init_timer_;
     static constexpr unsigned int num_joints_ = 3;
     static constexpr unsigned int num_legs_ = 6;

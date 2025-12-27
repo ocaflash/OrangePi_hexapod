@@ -39,7 +39,7 @@ private:
     std::queue<int> legs_queue_;
     bool run_state_, pause_state_;
     int phase_;
-    double passed_sec_, begin_sec_;
+    double passed_sec_, begin_sec_, cycle_time_;
     double low_rad_, high_rad_, height_, z_body_;
     double path_tolerance_, rounded_radius_;
     KDL::Vector final_vector_[NUM_LEGS];
