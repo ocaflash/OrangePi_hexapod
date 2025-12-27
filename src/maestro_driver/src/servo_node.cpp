@@ -63,6 +63,16 @@ private:
         float target_value;
         int s_num;
 
+        // Логируем входные данные
+        static int log_counter = 0;
+        if (++log_counter >= 25) {  // Каждые 0.5 сек при 50Hz
+            log_counter = 0;
+            RCLCPP_INFO(this->get_logger(), 
+                "Input joints: R1=[%.3f,%.3f,%.3f] L1=[%.3f,%.3f,%.3f]",
+                legs_jnts->joints_state[0].joint[0], legs_jnts->joints_state[0].joint[1], legs_jnts->joints_state[0].joint[2],
+                legs_jnts->joints_state[3].joint[0], legs_jnts->joints_state[3].joint[1], legs_jnts->joints_state[3].joint[2]);
+        }
+
         for (int i = 0; i < num_legs_; i++) {
             for (int j = 0; j < num_joints_; j++) {
                 s_num = i * 3 + j;
@@ -73,20 +83,6 @@ private:
                 // Небольшая задержка между командами для стабильности шины
                 std::this_thread::sleep_for(std::chrono::microseconds(100));
             }
-        }
-        
-        // Debug output every ~1 second (assuming 50Hz input)
-        static int counter = 0;
-        if (++counter >= 50) {
-            counter = 0;
-            RCLCPP_DEBUG(this->get_logger(), 
-                "Servos: R1=[%.0f,%.0f,%.0f] L1=[%.0f,%.0f,%.0f]",
-                127 + rotation_direction[0] * legs_jnts->joints_state[0].joint[0] * limit_coef_,
-                127 + rotation_direction[1] * legs_jnts->joints_state[0].joint[1] * limit_coef_,
-                127 + rotation_direction[2] * legs_jnts->joints_state[0].joint[2] * limit_coef_,
-                127 + rotation_direction[9] * legs_jnts->joints_state[3].joint[0] * limit_coef_,
-                127 + rotation_direction[10] * legs_jnts->joints_state[3].joint[1] * limit_coef_,
-                127 + rotation_direction[11] * legs_jnts->joints_state[3].joint[2] * limit_coef_);
         }
     }
 

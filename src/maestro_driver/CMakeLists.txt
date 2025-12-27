@@ -17,9 +17,15 @@ add_executable(servo_node src/servo_node.cpp)
 target_link_libraries(servo_node polstro)
 ament_target_dependencies(servo_node rclcpp std_msgs crab_msgs)
 
+# Servo test node (для диагностики)
+add_executable(servo_test_node src/servo_test_node.cpp)
+target_link_libraries(servo_test_node polstro)
+ament_target_dependencies(servo_test_node rclcpp)
+
 install(TARGETS
   polstro
   servo_node
+  servo_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
