@@ -113,6 +113,12 @@ void GaitKinematics::gaitGenerator() {
 }
 
 void GaitKinematics::teleopGaitCtrl(const crab_msgs::msg::GaitCommand::SharedPtr gait_cmd) {
+    static int prev_cmd = -1;
+    if (gait_cmd->cmd != prev_cmd) {
+        RCLCPP_INFO(this->get_logger(), "Received gait command: cmd=%d fi=%.2f scale=%.2f alpha=%.2f",
+                    gait_cmd->cmd, gait_cmd->fi, gait_cmd->scale, gait_cmd->alpha);
+        prev_cmd = gait_cmd->cmd;
+    }
     gait_command_.cmd = gait_cmd->cmd;
     gait_command_.fi = gait_cmd->fi;
     gait_command_.alpha = gait_cmd->alpha;

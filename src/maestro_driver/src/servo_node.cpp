@@ -6,12 +6,18 @@
 #include "PolstroSerialInterface.h"
 
 const int rotation_direction[18] = {
+    // R1: coxa, femur, tibia (каналы 0, 1, 2)
     1, -1, 1,
+    // R2: coxa, femur, tibia (каналы 3, 4, 5)
     1, -1, 1,
+    // R3: coxa, femur, tibia (каналы 6, 7, 8)
     1, -1, 1,
-    1, 1, -1,
-    1, 1, -1,
-    1, 1, -1
+    // L1: coxa, femur, tibia (каналы 9, 10, 11)
+    -1, 1, -1,
+    // L2: coxa, femur, tibia (каналы 12, 13, 14)
+    -1, 1, -1,
+    // L3: coxa, femur, tibia (каналы 15, 16, 17)
+    -1, 1, -1
 };
 
 class MaestroController : public rclcpp::Node {

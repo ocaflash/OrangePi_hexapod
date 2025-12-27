@@ -46,10 +46,11 @@ TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(fals
     body_cmd_pub_ = this->create_publisher<crab_msgs::msg::BodyCommand>("/teleop/body_command", 1);
     gait_cmd_pub_ = this->create_publisher<crab_msgs::msg::GaitCommand>("/teleop/gait_control", 1);
 
+    RCLCPP_INFO(this->get_logger(), "===========================================");
     RCLCPP_INFO(this->get_logger(), "Starting DS4 teleop converter...");
-    RCLCPP_INFO(this->get_logger(), "Controls: OPTIONS=stand/sit, Left stick=walk, Right stick=turn/scale");
-    RCLCPP_INFO(this->get_logger(), "Hold L1=body RPY, hold R1=body XYZ offsets, hold Square=gyro control");
-    RCLCPP_INFO(this->get_logger(), "Hold Square button and tilt controller for gyro control");
+    RCLCPP_INFO(this->get_logger(), "Controls: OPTIONS=stand/sit, Left stick=walk");
+    RCLCPP_INFO(this->get_logger(), "Robot starts SEATED. Press OPTIONS to stand up first!");
+    RCLCPP_INFO(this->get_logger(), "===========================================");
 }
 
 void TeleopJoy::ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu) {
@@ -68,6 +69,21 @@ void TeleopJoy::ds4ImuCallback(const sensor_msgs::msg::Imu::SharedPtr imu) {
 }
 
 void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
+    // Debug: log that we received joy message
+    static int joy_counter = 0;
+    static bool first_message = true;
+    
+    if (first_message) {
+        RCLCPP_INFO(this->get_logger(), "First joy message received! Joystick connected.");
+        first_message = false;
+    }
+    
+    if (++joy_counter >= 100) {  // Every ~2 seconds at 50Hz
+        joy_counter = 0;
+        RCLCPP_DEBUG(this->get_logger(), "Joy: axes=%zu buttons=%zu start_flag=%d",
+                    joy->axes.size(), joy->buttons.size(), start_flag_);
+    }
+    
     const int btn_start = getButton(joy, button_start_);
     const int btn_imu = getButton(joy, button_imu_);
     const int btn_gait_switch = getButton(joy, button_gait_switch_);
@@ -89,6 +105,8 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
 
     if (start_pressed && !imu_flag_ && (now - last_start_toggle_time_) > debounce) {
         last_start_toggle_time_ = now;
+        
+        RCLCPP_INFO(this->get_logger(), "OPTIONS pressed! start_flag was %d", start_flag_);
 
         // IMPORTANT: OPTIONS should NEVER start walking. Stop gait explicitly on mode change.
         gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
@@ -195,6 +213,10 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
                 gait_command_.fi = std::atan2(fi_x, fi_y);
                 gait_command_.scale = std::pow(a + b, 0.5) > 1 ? 1 : std::pow(a + b, 0.5);
                 gait_command_.alpha = 0;
+                
+                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 500,
+                    "Gait cmd: %s fi=%.2f scale=%.2f", 
+                    gait_flag_ ? "TRIPOD" : "RIPPLE", gait_command_.fi, gait_command_.scale);
             } else {
                 // All sticks in neutral - PAUSE
                 gait_command_.cmd = crab_msgs::msg::GaitCommand::PAUSE;
