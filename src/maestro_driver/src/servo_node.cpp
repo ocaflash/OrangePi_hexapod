@@ -63,19 +63,12 @@ private:
         float target_value;
         int s_num;
 
-        // Логируем входные данные для всех ног
+        // Логируем входные данные и выходные PWM значения
         static int log_counter = 0;
-        if (++log_counter >= 25) {  // Каждые 0.5 сек при 50Hz
+        bool do_log = (++log_counter >= 25);  // Каждые 0.5 сек при 50Hz
+        if (do_log) {
             log_counter = 0;
-            RCLCPP_INFO(this->get_logger(), "=== Input joints (radians) ===");
-            for (int leg = 0; leg < 6; leg++) {
-                const char* leg_names[] = {"R1", "R2", "R3", "L1", "L2", "L3"};
-                RCLCPP_INFO(this->get_logger(), "  %s: [%.3f, %.3f, %.3f]",
-                    leg_names[leg],
-                    legs_jnts->joints_state[leg].joint[0],
-                    legs_jnts->joints_state[leg].joint[1],
-                    legs_jnts->joints_state[leg].joint[2]);
-            }
+            RCLCPP_INFO(this->get_logger(), "=== Servo commands ===");
         }
 
         for (int i = 0; i < num_legs_; i++) {
@@ -84,8 +77,15 @@ private:
                 target_value = 127 + rotation_direction[s_num] * legs_jnts->joints_state[i].joint[j] * limit_coef_;
                 // Clamp to valid range
                 target_value = std::max(0.0f, std::min(254.0f, target_value));
+                
+                if (do_log && j == 0) {  // Логируем только coxa для краткости
+                    const char* leg_names[] = {"R1", "R2", "R3", "L1", "L2", "L3"};
+                    RCLCPP_INFO(this->get_logger(), "  %s ch%d: rad=%.3f -> pwm=%d (dir=%d)",
+                        leg_names[i], s_num, legs_jnts->joints_state[i].joint[j],
+                        static_cast<int>(target_value), rotation_direction[s_num]);
+                }
+                
                 maestro_->setTargetMSS(s_num, static_cast<unsigned char>(target_value));
-                // Небольшая задержка между командами для стабильности шины
                 std::this_thread::sleep_for(std::chrono::microseconds(100));
             }
         }
