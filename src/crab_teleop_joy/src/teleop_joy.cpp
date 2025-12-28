@@ -17,10 +17,18 @@ TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(fals
     body_cmd_pub_ = this->create_publisher<crab_msgs::msg::BodyCommand>("/teleop/body_command", 1);
     gait_cmd_pub_ = this->create_publisher<crab_msgs::msg::GaitCommand>("/teleop/gait_control", 1);
 
-    RCLCPP_INFO(this->get_logger(), "Starting DS4 teleop converter...");
+    RCLCPP_INFO(this->get_logger(), "Teleop started. Press OPTIONS to stand up.");
 }
 
 void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
+    // Логируем первое сообщение
+    static bool first_msg = true;
+    if (first_msg) {
+        RCLCPP_INFO(this->get_logger(), "Joy connected: %zu axes, %zu buttons", 
+                    joy->axes.size(), joy->buttons.size());
+        first_msg = false;
+    }
+
     // Безопасный доступ к кнопкам и осям
     auto getButton = [&](size_t idx) -> int {
         return (joy->buttons.size() > idx) ? joy->buttons[idx] : 0;
@@ -35,10 +43,12 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             start_flag_ = true;
             body_command_.cmd = crab_msgs::msg::BodyCommand::STAND_UP_CMD;
             body_cmd_pub_->publish(body_command_);
+            RCLCPP_INFO(this->get_logger(), "STAND_UP command sent");
         } else {
             start_flag_ = false;
             body_command_.cmd = crab_msgs::msg::BodyCommand::SEAT_DOWN_CMD;
             body_cmd_pub_->publish(body_command_);
+            RCLCPP_INFO(this->get_logger(), "SEAT_DOWN command sent");
         }
         std::this_thread::sleep_for(1000ms);
     }
