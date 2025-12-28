@@ -3,6 +3,13 @@
 
 using namespace std::chrono_literals;
 
+// Deadzone для осей джойстика
+constexpr float DEADZONE = 0.15f;
+
+inline float applyDeadzone(float value) {
+    return (std::abs(value) < DEADZONE) ? 0.0f : value;
+}
+
 TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(false), imu_flag_(false) {
     this->declare_parameter<double>("clearance", 0.045);
     z_ = this->get_parameter("clearance").as_double();
@@ -21,7 +28,6 @@ TeleopJoy::TeleopJoy() : Node("teleop_joy"), start_flag_(false), gait_flag_(fals
 }
 
 void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
-    // Логируем первое сообщение
     static bool first_msg = true;
     if (first_msg) {
         RCLCPP_INFO(this->get_logger(), "Joy connected: %zu axes, %zu buttons", 
@@ -29,7 +35,6 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
         first_msg = false;
     }
 
-    // Безопасный доступ к кнопкам и осям
     auto getButton = [&](size_t idx) -> int {
         return (joy->buttons.size() > idx) ? joy->buttons[idx] : 0;
     };
@@ -84,7 +89,7 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             move_body_pub_->publish(body_state_);
         }
         // R1 - управление смещением
-        if (getButton(button_right_shift_)) {
+        else if (getButton(button_right_shift_)) {
             body_state_.y = -0.05 * getAxis(axis_body_y_off_);
             body_state_.x = -0.05 * getAxis(axis_body_x_off_);
             if (getAxis(axis_body_z_off_) < 0) {
@@ -95,54 +100,52 @@ void TeleopJoy::joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy) {
             move_body_pub_->publish(body_state_);
         }
         // Походка - когда L1 и R1 не нажаты
-        if (!getButton(button_left_shift_) && !getButton(button_right_shift_)) {
-            float fi_x = getAxis(axis_fi_x_);
-            float fi_y = getAxis(axis_fi_y_);
-            float alpha = getAxis(axis_alpha_);
-            float scale = getAxis(axis_scale_);
+        else {
+            // Применяем deadzone ко всем осям
+            float fi_x = applyDeadzone(getAxis(axis_fi_x_));
+            float fi_y = applyDeadzone(getAxis(axis_fi_y_));
+            float alpha = applyDeadzone(getAxis(axis_alpha_));
+            float scale_axis = applyDeadzone(getAxis(axis_scale_));
 
-            // Левый стик - направление и скорость
-            if (fi_x != 0 || fi_y != 0) {
-                if (!gait_flag_) {
-                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
-                } else {
-                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNTRIPOD;
-                }
-                float a = std::pow(fi_x, 2);
-                float b = std::pow(fi_y, 2);
+            bool left_stick_active = (fi_x != 0.0f || fi_y != 0.0f);
+            bool right_stick_active = (alpha != 0.0f || scale_axis != 0.0f);
+
+            if (left_stick_active) {
+                // Левый стик - направление и скорость
+                gait_command_.cmd = gait_flag_ ? crab_msgs::msg::GaitCommand::RUNTRIPOD 
+                                               : crab_msgs::msg::GaitCommand::RUNRIPPLE;
+                float a = fi_x * fi_x;
+                float b = fi_y * fi_y;
                 gait_command_.fi = std::atan2(fi_x, fi_y);
-                gait_command_.scale = std::pow(a + b, 0.5) > 1 ? 1 : std::pow(a + b, 0.5);
+                gait_command_.scale = std::min(1.0f, std::sqrt(a + b));
                 gait_command_.alpha = 0;
-            }
-
-            // Правый стик - поворот на месте
-            if (alpha != 0 || scale != 0) {
-                if (!gait_flag_) {
-                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNRIPPLE;
-                } else {
-                    gait_command_.cmd = crab_msgs::msg::GaitCommand::RUNTRIPOD;
-                }
-                gait_command_.fi = (scale > 0) ? 0 : 3.14;
-                gait_command_.scale = scale;
-                if (gait_command_.scale < 0) gait_command_.scale *= -1;
-                gait_command_.alpha = ((alpha > 0) ? 1 : -1) * 0.06 * (1 - gait_command_.scale) + 0.11 * alpha;
-            }
-
-            // Все стики в нейтрали - пауза
-            if (!alpha && !scale && !fi_x && !fi_y) {
-                gait_command_.cmd = crab_msgs::msg::GaitCommand::PAUSE;
+            } else if (right_stick_active) {
+                // Правый стик - поворот на месте
+                gait_command_.cmd = gait_flag_ ? crab_msgs::msg::GaitCommand::RUNTRIPOD 
+                                               : crab_msgs::msg::GaitCommand::RUNRIPPLE;
+                gait_command_.fi = (scale_axis > 0) ? 0.0f : 3.14f;
+                gait_command_.scale = std::abs(scale_axis);
+                gait_command_.alpha = ((alpha > 0) ? 1.0f : -1.0f) * 0.06f * (1.0f - gait_command_.scale) + 0.11f * alpha;
+            } else {
+                // Все стики в нейтрали - STOP (не PAUSE, чтобы не продолжать движение)
+                gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
+                gait_command_.scale = 0;
+                gait_command_.alpha = 0;
             }
             gait_cmd_pub_->publish(gait_command_);
         }
     } else {
-        // Робот сидит - регулировка leg_radius
+        // Робот сидит
         if (getButton(button_right_shift_2_) && !imu_flag_) {
             body_state_.z = -0.01;
             body_state_.leg_radius = 0.06 * getAxis(axis_body_yaw_) + 0.11;
             move_body_pub_->publish(body_state_);
         }
-        gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
-        gait_cmd_pub_->publish(gait_command_);
+        // Отправляем STOP только если команда изменилась
+        if (gait_command_.cmd != crab_msgs::msg::GaitCommand::STOP) {
+            gait_command_.cmd = crab_msgs::msg::GaitCommand::STOP;
+            gait_cmd_pub_->publish(gait_command_);
+        }
     }
 }
 
