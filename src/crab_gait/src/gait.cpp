@@ -1,6 +1,8 @@
 #include "gait.hpp"
 
-Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0) {
+Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0),
+               path_support_(nullptr), path_transfer_(nullptr), 
+               trajectory_transfer_(nullptr), trajectory_support_(nullptr) {
     legs_queue_.push(5);
     legs_queue_.push(0);
     legs_queue_.push(4);
@@ -34,6 +36,13 @@ void Gait::setAlpha(double alpha) {
 }
 
 void Gait::setPath() {
+    // Удаляем старые объекты
+    delete trajectory_transfer_;
+    delete trajectory_support_;
+    trajectory_transfer_ = nullptr;
+    trajectory_support_ = nullptr;
+    
+    // Path объекты будут удалены Trajectory_Segment, поэтому создаём новые
     path_support_ = new KDL::Path_Line(d, a, rot_, path_tolerance_, true);
     path_transfer_ = new KDL::Path_RoundedComposite(rounded_radius_, path_tolerance_, rot_);
     path_transfer_->Add(a);
@@ -73,7 +82,6 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
 
     passed_sec_ = now_sec - begin_sec_;
     
-    // Clamp to trajectory duration
     double t = passed_sec_;
     if (t > trajectory_transfer_->Duration()) t = trajectory_transfer_->Duration();
     if (t < 0) t = 0;
@@ -147,7 +155,6 @@ void Gait::getTipVector(KDL::Trajectory_Segment* trajectory, double phase_offset
                         std::vector<KDL::Frame>::const_iterator vector_iter, double scale) {
     KDL::Frame frame;
     double t = passed_sec_ + phase_offset;
-    // Clamp time to valid range to avoid KDL assertion
     if (t > trajectory->Duration()) t = trajectory->Duration();
     if (t < 0) t = 0;
     frame = trajectory->Pos(t);

@@ -50,6 +50,8 @@ private:
     KDL::RotationalInterpolation_SingleAxis* rot_ = new KDL::RotationalInterpolation_SingleAxis();
     KDL::Path_Line* path_support_;
     KDL::Path_RoundedComposite* path_transfer_;
+    KDL::Trajectory_Segment* trajectory_transfer_;
+    KDL::Trajectory_Segment* trajectory_support_;
     KDL::VelocityProfile_Spline prof_support_, prof_transfer_;
 };
 
