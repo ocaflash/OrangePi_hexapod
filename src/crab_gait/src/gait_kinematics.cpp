@@ -61,7 +61,8 @@ void GaitKinematics::gaitGenerator() {
     int publish_count = 0;
     
     while (rclcpp::ok()) {
-        if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNRIPPLE) {
+        // Запускаем походку только если scale > 0
+        if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNRIPPLE && gait_command_.scale > 0.01) {
             final_vector = gait.RunRipple(frames_.begin(), gait_command_.fi, gait_command_.scale,
                                           gait_command_.alpha, d_ripple_);
             if (callService(final_vector)) {
@@ -74,7 +75,7 @@ void GaitKinematics::gaitGenerator() {
                                 legs_.joints_state[1].joint[0], legs_.joints_state[1].joint[1], legs_.joints_state[1].joint[2]);
                 }
             }
-        } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNTRIPOD) {
+        } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNTRIPOD && gait_command_.scale > 0.01) {
             final_vector = gait.RunTripod(frames_.begin(), gait_command_.fi, gait_command_.scale,
                                           gait_command_.alpha, d_tripod_);
             if (callService(final_vector)) {
@@ -86,6 +87,7 @@ void GaitKinematics::gaitGenerator() {
         } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::PAUSE) {
             gait.Pause();
         } else {
+            // STOP или scale слишком маленький
             gait.Stop();
         }
         
