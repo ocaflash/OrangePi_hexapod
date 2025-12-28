@@ -20,7 +20,7 @@ public:
     MaestroController() : Node("maestro_servo_node") {
         this->declare_parameter<double>("joint_lower_limit", -1.570796327);
         this->declare_parameter<double>("joint_upper_limit", 1.570796327);
-        this->declare_parameter<std::string>("port_name", "/dev/ttyACM1");
+        this->declare_parameter<std::string>("port_name", "/dev/ttyS5");
         this->declare_parameter<int>("baud_rate", 115200);
 
         joint_lower_limit_ = this->get_parameter("joint_lower_limit").as_double();
