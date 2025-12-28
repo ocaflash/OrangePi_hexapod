@@ -20,8 +20,17 @@ ament_target_dependencies(gait_kinematics
   crab_msgs
 )
 
+add_executable(gait_test_node
+  src/gait_test_node.cpp
+)
+ament_target_dependencies(gait_test_node
+  rclcpp
+  crab_msgs
+)
+
 install(TARGETS
   gait_kinematics
+  gait_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

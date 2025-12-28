@@ -1,10 +1,6 @@
 #include "gait.hpp"
-#include <cmath>
 
-Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0),
-               path_support_(nullptr), path_transfer_(nullptr), 
-               trajectory_transfer_(nullptr), trajectory_support_(nullptr),
-               last_fi_(999), last_alpha_(999), last_duration_(0) {
+Gait::Gait() : run_state_(false), pause_state_(false), phase_(0), passed_sec_(0), begin_sec_(0) {
     legs_queue_.push(5);
     legs_queue_.push(0);
     legs_queue_.push(4);
@@ -38,12 +34,8 @@ void Gait::setAlpha(double alpha) {
 }
 
 void Gait::setPath() {
-    // Удаляем старые trajectory (они владеют path объектами)
-    delete trajectory_transfer_;
-    delete trajectory_support_;
-    trajectory_transfer_ = nullptr;
-    trajectory_support_ = nullptr;
-    
+    // Как в оригинале ROS1 - создаём новые объекты каждый раз
+    // rot_ переиспользуется (не владеет памятью в Path_Line)
     path_support_ = new KDL::Path_Line(d, a, rot_, path_tolerance_, true);
     path_transfer_ = new KDL::Path_RoundedComposite(rounded_radius_, path_tolerance_, rot_);
     path_transfer_->Add(a);
@@ -56,39 +48,19 @@ void Gait::setPath() {
 void Gait::setTrajectory(double sup_path_duration, double tran_path_duration) {
     prof_support_.SetProfileDuration(0, path_support_->PathLength(), sup_path_duration);
     prof_transfer_.SetProfileDuration(0, path_transfer_->PathLength(), tran_path_duration);
+    // Trajectory_Segment НЕ владеет prof_, поэтому передаём указатель
     trajectory_transfer_ = new KDL::Trajectory_Segment(path_transfer_, &prof_transfer_);
     trajectory_support_ = new KDL::Trajectory_Segment(path_support_, &prof_support_);
 }
 
-bool Gait::needsRebuild(double fi, double alpha, double duration) {
-    // Пересоздаём траекторию только если параметры значительно изменились
-    const double fi_threshold = 0.05;      // ~3 градуса
-    const double alpha_threshold = 0.02;
-    const double duration_threshold = 0.1;
-    
-    if (std::abs(fi - last_fi_) > fi_threshold ||
-        std::abs(alpha - last_alpha_) > alpha_threshold ||
-        std::abs(duration - last_duration_) > duration_threshold ||
-        trajectory_transfer_ == nullptr) {
-        last_fi_ = fi;
-        last_alpha_ = alpha;
-        last_duration_ = duration;
-        return true;
-    }
-    return false;
-}
-
 KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter, 
                               double fi, double scale, double alpha, double duration) {
-    // Пересоздаём траекторию только при изменении параметров
-    if (needsRebuild(fi, alpha, duration)) {
-        setFi(fi);
-        setAlpha(alpha);
-        setPath();
-        setTrajectory(duration, duration);
-    }
-    
+    setFi(fi);
+    setAlpha(alpha);
+    setPath();
+    setTrajectory(duration, duration);
     KDL::Frame frame;
+
     auto now_sec = rclcpp::Clock().now().seconds();
 
     if (!run_state_) {
@@ -104,23 +76,14 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
 
     passed_sec_ = now_sec - begin_sec_;
     
-    double t = passed_sec_;
-    if (t > trajectory_transfer_->Duration()) t = trajectory_transfer_->Duration();
-    if (t < 0) t = 0;
-
     for (int i = phase_; i < num_legs_; i += 2) {
-        frame = trajectory_transfer_->Pos(t);
+        frame = trajectory_transfer_->Pos(passed_sec_);
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
         final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
     }
-    
-    t = passed_sec_;
-    if (t > trajectory_support_->Duration()) t = trajectory_support_->Duration();
-    if (t < 0) t = 0;
-    
     for (int i = !phase_; i < num_legs_; i += 2) {
-        frame = trajectory_support_->Pos(t);
+        frame = trajectory_support_->Pos(passed_sec_);
         frame.p.x(frame.p.data[0] * scale);
         frame.p.y(frame.p.data[1] * scale);
         final_vector_[i] = frame.M * (*(vector_iter + i)).p + frame.p;
@@ -137,14 +100,10 @@ KDL::Vector* Gait::RunTripod(std::vector<KDL::Frame>::const_iterator vector_iter
 KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter, 
                               double fi, double scale, double alpha, double duration) {
     double phase_offset = duration / num_legs_;
-    
-    // Пересоздаём траекторию только при изменении параметров
-    if (needsRebuild(fi, alpha, duration)) {
-        setFi(fi);
-        setAlpha(alpha);
-        setPath();
-        setTrajectory(duration * 2 / 3, duration / 3);
-    }
+    setFi(fi);
+    setAlpha(alpha);
+    setPath();
+    setTrajectory(duration * 2 / 3, duration / 3);
 
     auto now_sec = rclcpp::Clock().now().seconds();
 
@@ -180,10 +139,7 @@ KDL::Vector* Gait::RunRipple(std::vector<KDL::Frame>::const_iterator vector_iter
 void Gait::getTipVector(KDL::Trajectory_Segment* trajectory, double phase_offset,
                         std::vector<KDL::Frame>::const_iterator vector_iter, double scale) {
     KDL::Frame frame;
-    double t = passed_sec_ + phase_offset;
-    if (t > trajectory->Duration()) t = trajectory->Duration();
-    if (t < 0) t = 0;
-    frame = trajectory->Pos(t);
+    frame = trajectory->Pos(passed_sec_ + phase_offset);
     frame.p.x(frame.p.data[0] * scale);
     frame.p.y(frame.p.data[1] * scale);
     final_vector_[legs_queue_.front()] = frame.M * (*(vector_iter + legs_queue_.front())).p + frame.p;
@@ -197,7 +153,4 @@ void Gait::Pause() {
 
 void Gait::Stop() {
     run_state_ = false;
-    // Сбрасываем кэш при остановке
-    last_fi_ = 999;
-    last_alpha_ = 999;
 }
