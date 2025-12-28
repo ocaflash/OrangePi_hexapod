@@ -48,8 +48,8 @@ def generate_launch_description():
     # Аргументы
     port_name_arg = DeclareLaunchArgument(
         'port_name',
-        default_value='/dev/ttyACM0',
-        description='Serial port for Maestro servo controller (USB)'
+        default_value='/dev/ttyACM1',
+        description='Serial port for Maestro servo controller (USB Command port)'
     )
     maestro_protocol_arg = DeclareLaunchArgument(
         'maestro_protocol',

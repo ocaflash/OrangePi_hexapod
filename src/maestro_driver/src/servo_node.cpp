@@ -20,7 +20,7 @@ public:
     MaestroController() : Node("maestro_servo_node") {
         this->declare_parameter<double>("joint_lower_limit", -1.570796327);
         this->declare_parameter<double>("joint_upper_limit", 1.570796327);
-        this->declare_parameter<std::string>("port_name", "/dev/ttyACM0");
+        this->declare_parameter<std::string>("port_name", "/dev/ttyACM1");
         this->declare_parameter<int>("baud_rate", 115200);
 
         joint_lower_limit_ = this->get_parameter("joint_lower_limit").as_double();
@@ -53,7 +53,16 @@ public:
 
 private:
     void chatterLegsState(const crab_msgs::msg::LegsJointsState::SharedPtr legs_jnts) {
-        if (!maestro_ || !maestro_->isOpen()) return;
+        if (!maestro_ || !maestro_->isOpen()) {
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, 
+                "Maestro not connected!");
+            return;
+        }
+
+        static int msg_count = 0;
+        if (++msg_count == 1) {
+            RCLCPP_INFO(this->get_logger(), "First joints message received");
+        }
 
         float target_value;
         int s_num;
