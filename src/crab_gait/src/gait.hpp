@@ -26,8 +26,6 @@ public:
     void Stop();
 
     KDL::Frame a, b, c, d;
-    KDL::Trajectory_Segment* trajectory_transfer_;
-    KDL::Trajectory_Segment* trajectory_support_;
 
 private:
     static constexpr unsigned int num_joints_ = NUM_JOINTS;
@@ -39,6 +37,7 @@ private:
     void setAlpha(double alpha);
     void setPath();
     void setTrajectory(double sup_path_duration, double tran_path_duration);
+    bool needsRebuild(double fi, double alpha, double duration);
 
     std::queue<int> legs_queue_;
     bool run_state_, pause_state_;
@@ -46,6 +45,7 @@ private:
     double passed_sec_, begin_sec_;
     double low_rad_, high_rad_, height_, z_body_;
     double path_tolerance_, rounded_radius_;
+    double last_fi_, last_alpha_, last_duration_;  // Кэш параметров
     KDL::Vector final_vector_[NUM_LEGS];
     KDL::RotationalInterpolation_SingleAxis* rot_ = new KDL::RotationalInterpolation_SingleAxis();
     KDL::Path_Line* path_support_;
