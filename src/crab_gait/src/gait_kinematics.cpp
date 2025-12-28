@@ -69,6 +69,9 @@ void GaitKinematics::gaitGenerator() {
                 if (++publish_count % 25 == 0) {
                     RCLCPP_INFO(this->get_logger(), "RIPPLE: published %d msgs, fi=%.2f scale=%.2f",
                                 publish_count, gait_command_.fi, gait_command_.scale);
+                    RCLCPP_INFO(this->get_logger(), "  leg0=[%.3f,%.3f,%.3f] leg1=[%.3f,%.3f,%.3f]",
+                                legs_.joints_state[0].joint[0], legs_.joints_state[0].joint[1], legs_.joints_state[0].joint[2],
+                                legs_.joints_state[1].joint[0], legs_.joints_state[1].joint[1], legs_.joints_state[1].joint[2]);
                 }
             }
         } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNTRIPOD) {
