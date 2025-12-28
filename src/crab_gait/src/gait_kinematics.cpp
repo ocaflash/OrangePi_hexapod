@@ -58,6 +58,7 @@ void GaitKinematics::gaitGenerator() {
     RCLCPP_INFO(this->get_logger(), "Gait generator started");
 
     rclcpp::Rate rate(25);  // 25 Hz как в оригинале
+    int publish_count = 0;
     
     while (rclcpp::ok()) {
         if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNRIPPLE) {
@@ -65,12 +66,19 @@ void GaitKinematics::gaitGenerator() {
                                           gait_command_.alpha, d_ripple_);
             if (callService(final_vector)) {
                 joints_pub_->publish(legs_);
+                if (++publish_count % 25 == 0) {
+                    RCLCPP_INFO(this->get_logger(), "RIPPLE: published %d msgs, fi=%.2f scale=%.2f",
+                                publish_count, gait_command_.fi, gait_command_.scale);
+                }
             }
         } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::RUNTRIPOD) {
             final_vector = gait.RunTripod(frames_.begin(), gait_command_.fi, gait_command_.scale,
                                           gait_command_.alpha, d_tripod_);
             if (callService(final_vector)) {
                 joints_pub_->publish(legs_);
+                if (++publish_count % 25 == 0) {
+                    RCLCPP_INFO(this->get_logger(), "TRIPOD: published %d msgs", publish_count);
+                }
             }
         } else if (gait_command_.cmd == crab_msgs::msg::GaitCommand::PAUSE) {
             gait.Pause();
