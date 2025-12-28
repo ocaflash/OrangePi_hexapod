@@ -60,12 +60,21 @@ private:
         }
 
         static int msg_count = 0;
-        if (++msg_count == 1) {
+        msg_count++;
+        
+        if (msg_count == 1) {
             RCLCPP_INFO(this->get_logger(), "First joints message received");
         }
 
         float target_value;
         int s_num;
+        
+        // Логируем PWM значения каждую секунду
+        bool do_log = (msg_count % 25 == 0);
+        
+        if (do_log) {
+            RCLCPP_INFO(this->get_logger(), "Sending to Maestro (msg #%d):", msg_count);
+        }
 
         for (int i = 0; i < num_legs_; i++) {
             for (int j = 0; j < num_joints_; j++) {
@@ -73,6 +82,16 @@ private:
                 target_value = 127 + rotation_direction[s_num] * legs_jnts->joints_state[i].joint[j] * limit_coef_;
                 target_value = std::max(0.0f, std::min(254.0f, target_value));
                 maestro_->setTargetMSS(s_num, static_cast<unsigned char>(target_value));
+            }
+            
+            if (do_log) {
+                // Пересчитаем для лога
+                int pwm0 = 127 + rotation_direction[i*3+0] * legs_jnts->joints_state[i].joint[0] * limit_coef_;
+                int pwm1 = 127 + rotation_direction[i*3+1] * legs_jnts->joints_state[i].joint[1] * limit_coef_;
+                int pwm2 = 127 + rotation_direction[i*3+2] * legs_jnts->joints_state[i].joint[2] * limit_coef_;
+                const char* names[] = {"R1", "R2", "R3", "L1", "L2", "L3"};
+                RCLCPP_INFO(this->get_logger(), "  %s: ch%d=%d ch%d=%d ch%d=%d",
+                    names[i], i*3, pwm0, i*3+1, pwm1, i*3+2, pwm2);
             }
         }
     }
