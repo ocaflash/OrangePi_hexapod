@@ -1,12 +1,11 @@
 """
 Демо походки на реальных сервах.
-Запускает demo_gait.py + servo_node для управления Maestro.
 """
 
 import os
 import yaml
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
 from launch_ros.actions import Node
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
@@ -40,6 +39,12 @@ def generate_launch_description():
         default_value='/dev/ttyS5',
         description='Serial port for Maestro'
     )
+
+    # Путь к demo_gait.py
+    demo_script = os.path.join(pkg_share, '..', '..', 'lib', 'crab_description', 'demo_gait.py')
+    # Альтернативный путь если симлинк
+    if not os.path.exists(demo_script):
+        demo_script = '/home/orangepi/ros2_ws/src/OrangePi_hexapod/src/crab_description/scripts/demo_gait.py'
 
     return LaunchDescription([
         port_name_arg,
@@ -84,7 +89,6 @@ def generate_launch_description():
                 {'duration_tripod': geometry_config['gait']['timing']['tripod_duration']},
             ],
         ),
-        # Maestro Servo Driver
         Node(
             package='maestro_driver',
             executable='servo_node',
@@ -94,10 +98,14 @@ def generate_launch_description():
             }],
             output='screen',
         ),
-        # Demo script
-        Node(
-            package='crab_description',
-            executable='demo_gait.py',
-            output='screen',
+        # Запускаем demo скрипт через python3 с задержкой
+        TimerAction(
+            period=2.0,
+            actions=[
+                ExecuteProcess(
+                    cmd=['python3', demo_script],
+                    output='screen',
+                ),
+            ],
         ),
     ])
